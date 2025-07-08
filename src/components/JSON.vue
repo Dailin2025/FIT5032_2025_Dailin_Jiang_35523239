@@ -144,6 +144,7 @@ import bookstores from "../assets/json/bookstores.json"
 const showMessage = ref(false)
 
 // Activity 2: Get authors born after 1850
+// Hello
 const modernAuthors = computed(() => 
   authors.filter((author) => author.birthYear > 1850)
 )
