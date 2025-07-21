@@ -1,7 +1,9 @@
 <template>
   <NavBar />
-  <div class="global-container">
-    <router-view />
+  <div class="app-background">
+    <div class="global-container">
+      <router-view />
+    </div>
   </div>
 </template>
 
@@ -9,8 +11,45 @@
 import NavBar from './components/NavBar.vue'
 </script>
 
+<style>
+body {
+  background-color: #f8f9fa;
+}
+</style>
+
 <style scoped>
+.app-background {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-background::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(75, 108, 243, 0.1), transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.app-background::after {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  right: -20%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(243, 75, 168, 0.1), transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+}
+
 .global-container {
+  position: relative;
+  z-index: 1;
   max-width: 1200px;
   margin: 32px auto 0 auto;
   background: #fff;

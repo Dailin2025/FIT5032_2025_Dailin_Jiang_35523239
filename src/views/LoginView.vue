@@ -5,9 +5,9 @@
         <h2 class="mb-4 text-center">Login</h2>
         <form @submit.prevent="handleLogin">
           <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input v-model="form.username" type="text" class="form-control" :class="{'is-invalid': errors.username}" />
-            <div class="invalid-feedback" v-if="errors.username">{{ errors.username }}</div>
+            <label class="form-label">Email</label>
+            <input v-model="form.email" type="email" class="form-control" :class="{'is-invalid': errors.email}" />
+            <div class="invalid-feedback" v-if="errors.email">{{ errors.email }}</div>
           </div>
           <div class="mb-3">
             <label class="form-label">Password</label>
@@ -30,7 +30,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 const form = reactive({
-  username: '',
+  email: '',
   password: ''
 })
 const errors = reactive({})
@@ -38,17 +38,17 @@ const errorMsg = ref('')
 const successMsg = ref('')
 
 function validate() {
-  errors.username = form.username ? '' : 'Username is required.'
-  errors.password = form.password ? (form.password.length >= 6 ? '' : 'Password must be at least 6 characters.') : 'Password is required.'
-  return !errors.username && !errors.password
+  errors.email = form.email ? (/^\S+@\S+\.\S+$/.test(form.email) ? '' : 'Invalid email format.') : 'Email is required.'
+  errors.password = form.password ? '' : 'Password is required.'
+  return !errors.email && !errors.password
 }
 
 function handleLogin() {
   if (!validate()) return
   const users = JSON.parse(localStorage.getItem('users') || '[]')
-  const user = users.find(u => u.username === form.username && u.password === form.password)
+  const user = users.find(u => u.email === form.email && u.password === form.password)
   if (!user) {
-    errorMsg.value = 'Invalid username or password.'
+    errorMsg.value = 'Invalid email or password.'
     return
   }
   localStorage.setItem('currentUser', JSON.stringify(user))

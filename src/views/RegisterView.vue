@@ -1,6 +1,6 @@
 <template>
   <div class="d-flex justify-content-center align-items-center min-vh-100">
-    <div class="col-md-6">
+      <div class="col-md-6">
       <div class="card p-4">
         <h2 class="mb-4 text-center">Register</h2>
         <form @submit.prevent="handleRegister">
@@ -74,7 +74,7 @@ function handleRegister() {
   localStorage.setItem('users', JSON.stringify(users))
   successMsg.value = 'Registration successful! Redirecting to login...'
   setTimeout(() => {
-    router.push('/login')
+  router.push('/login')
   }, 1000)
   form.username = ''
   form.email = ''

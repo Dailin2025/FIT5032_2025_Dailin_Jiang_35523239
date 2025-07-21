@@ -1,6 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 
+import socialEventsImage from '@/asserts/pexels-photo-3768131.jpeg'
+import bookDoctorImage from '@/asserts/pexels-photo-5215024.jpeg'
+import volunteerHelpImage from '@/asserts/pexels-photo-6646917.jpeg'
+import avoidScamsImage from '@/asserts/pexels-photo-590022.jpeg'
+
 const isAuthenticated = ref(false)
 const currentUser = ref(null)
 
@@ -19,22 +24,26 @@ const cards = [
   {
     title: 'Social Events',
     desc: 'Find and join offline or online activities to stay active and connected.',
-    link: '/social-events'
+    link: '/social-events',
+    image: socialEventsImage
   },
   {
     title: 'Book a Doctor',
     desc: 'Easily book appointments with trusted doctors and keep track of your health.',
-    link: '/book-doctor'
+    link: '/book-doctor',
+    image: bookDoctorImage
   },
   {
     title: 'Volunteer Help',
     desc: 'Connect with volunteers for companionship or technical assistance.',
-    link: '/volunteer-help'
+    link: '/volunteer-help',
+    image: volunteerHelpImage
   },
   {
     title: 'Avoid Scams',
     desc: 'Learn about common scams, get safety alerts, and find emergency contacts.',
-    link: '/avoid-scams'
+    link: '/avoid-scams',
+    image: avoidScamsImage
   }
 ]
 </script>
@@ -56,8 +65,8 @@ const cards = [
     <div class="row justify-content-center">
       <div class="col-3 mb-4" v-for="card in cards" :key="card.title">
         <div class="card h-100">
+          <img :src="card.image" class="card-img-top" alt="..." style="height: 150px; object-fit: cover;">
           <div class="card-body d-flex flex-column">
-            <div class="mb-3" style="height:120px;background:#e9ecef;"></div>
             <h5 class="card-title">{{ card.title }}</h5>
             <p class="card-text flex-grow-1">{{ card.desc }}</p>
             <router-link :to="card.link" class="btn btn-outline-primary mt-auto">Your More &rarr;</router-link>
