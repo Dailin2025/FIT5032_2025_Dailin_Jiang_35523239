@@ -118,6 +118,7 @@
 <script setup>
 import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { sanitizeInput } from '@/utils/security.js'
 
 const scams = ref([])
 const currentUser = ref(null)
@@ -215,11 +216,13 @@ function handleCreateScam() {
     alert('Please fill in all fields.')
     return
   }
+  
+  // Sanitize user inputs
   const newArticle = {
     id: Date.now(),
-    title: newScam.value.title,
-    brief: newScam.value.brief,
-    detail: newScam.value.detail,
+    title: sanitizeInput(newScam.value.title.trim()),
+    brief: sanitizeInput(newScam.value.brief.trim()),
+    detail: sanitizeInput(newScam.value.detail.trim()),
     author: currentUser.value.username,
     comments: []
   }
@@ -253,10 +256,12 @@ function handleAddComment() {
     alert('Comment cannot be empty.')
     return
   }
+  
+  // Sanitize comment text
   const comment = {
     id: Date.now(),
     author: currentUser.value.username,
-    text: newCommentText.value.trim()
+    text: sanitizeInput(newCommentText.value.trim())
   }
   const scamIndex = scams.value.findIndex(s => s.id === selectedScam.value.id)
   if (scamIndex !== -1) {

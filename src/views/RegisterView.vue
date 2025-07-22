@@ -45,6 +45,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { validateEmail, validatePassword, validateUsername, sanitizeInput } from '@/utils/security.js'
 
 const router = useRouter()
 
@@ -59,23 +60,84 @@ const errors = reactive({})
 const successMsg = ref('')
 
 function validate() {
-  errors.username = form.username ? '' : 'Username is required.'
-  errors.email = form.email ? (/^\S+@\S+\.\S+$/.test(form.email) ? '' : 'Invalid email format.') : 'Email is required.'
-  errors.password = form.password ? (form.password.length >= 6 ? '' : 'Password must be at least 6 characters.') : 'Password is required.'
-  errors.confirmPassword = form.confirmPassword ? (form.confirmPassword === form.password ? '' : 'Passwords do not match.') : 'Please confirm your password.'
-  errors.role = form.role ? '' : 'Role is required.'
+  // Sanitize inputs
+  const sanitizedUsername = sanitizeInput(form.username.trim())
+  const sanitizedEmail = sanitizeInput(form.email.trim())
+  
+  errors.username = ''
+  errors.email = ''
+  errors.password = ''
+  errors.confirmPassword = ''
+  errors.role = ''
+  
+  // Username validation
+  if (!sanitizedUsername) {
+    errors.username = 'Username is required.'
+  } else if (!validateUsername(sanitizedUsername)) {
+    errors.username = 'Username must be 3-20 characters, alphanumeric and underscore only.'
+  }
+  
+  // Email validation
+  if (!sanitizedEmail) {
+    errors.email = 'Email is required.'
+  } else if (!validateEmail(sanitizedEmail)) {
+    errors.email = 'Invalid email format.'
+  }
+  
+  // Password validation
+  if (!form.password) {
+    errors.password = 'Password is required.'
+  } else if (!validatePassword(form.password)) {
+    errors.password = 'Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 number.'
+  }
+  
+  // Confirm password validation
+  if (!form.confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password.'
+  } else if (form.confirmPassword !== form.password) {
+    errors.confirmPassword = 'Passwords do not match.'
+  }
+  
+  // Role validation
+  if (!form.role) {
+    errors.role = 'Role is required.'
+  }
+  
   return !errors.username && !errors.email && !errors.password && !errors.confirmPassword && !errors.role
 }
 
 function handleRegister() {
   if (!validate()) return
+  
+  // Sanitize data before saving
+  const userData = {
+    username: sanitizeInput(form.username.trim()),
+    email: sanitizeInput(form.email.trim()),
+    password: form.password, // Don't sanitize password
+    role: form.role
+  }
+  
   const users = JSON.parse(localStorage.getItem('users') || '[]')
-  users.push({ ...form })
+  
+  // Check if username or email already exists
+  const existingUser = users.find(u => u.username === userData.username || u.email === userData.email)
+  if (existingUser) {
+    if (existingUser.username === userData.username) {
+      errors.username = 'Username already exists.'
+    } else {
+      errors.email = 'Email already exists.'
+    }
+    return
+  }
+  
+  users.push(userData)
   localStorage.setItem('users', JSON.stringify(users))
   successMsg.value = 'Registration successful! Redirecting to login...'
   setTimeout(() => {
-  router.push('/login')
+    router.push('/login')
   }, 1000)
+  
+  // Clear form
   form.username = ''
   form.email = ''
   form.password = ''

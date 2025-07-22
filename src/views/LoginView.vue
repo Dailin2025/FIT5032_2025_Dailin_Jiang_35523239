@@ -26,6 +26,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { validateEmail, sanitizeInput } from '@/utils/security.js'
 
 const router = useRouter()
 
@@ -38,19 +39,39 @@ const errorMsg = ref('')
 const successMsg = ref('')
 
 function validate() {
-  errors.email = form.email ? (/^\S+@\S+\.\S+$/.test(form.email) ? '' : 'Invalid email format.') : 'Email is required.'
-  errors.password = form.password ? '' : 'Password is required.'
+  // Sanitize inputs
+  const sanitizedEmail = sanitizeInput(form.email.trim())
+  
+  errors.email = ''
+  errors.password = ''
+  
+  // Email validation
+  if (!sanitizedEmail) {
+    errors.email = 'Email is required.'
+  } else if (!validateEmail(sanitizedEmail)) {
+    errors.email = 'Invalid email format.'
+  }
+  
+  // Password validation
+  if (!form.password) {
+    errors.password = 'Password is required.'
+  }
+  
   return !errors.email && !errors.password
 }
 
 function handleLogin() {
   if (!validate()) return
+  
+  const sanitizedEmail = sanitizeInput(form.email.trim())
   const users = JSON.parse(localStorage.getItem('users') || '[]')
-  const user = users.find(u => u.email === form.email && u.password === form.password)
+  const user = users.find(u => u.email === sanitizedEmail && u.password === form.password)
+  
   if (!user) {
     errorMsg.value = 'Invalid email or password.'
     return
   }
+  
   localStorage.setItem('currentUser', JSON.stringify(user))
   window.__auth = { isAuthenticated: true, user }
   window.dispatchEvent(new Event('auth-changed'))
