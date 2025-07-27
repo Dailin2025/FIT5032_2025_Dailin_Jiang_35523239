@@ -68,6 +68,31 @@
                 <div class="input-focus-border"></div>
               </div>
               <div class="invalid-feedback" v-if="errors.password">{{ errors.password }}</div>
+              
+              <!-- 密码要求提示 -->
+              <div class="password-requirements mt-2">
+                <h6 class="requirements-title">
+                  <i class="fas fa-info-circle me-2"></i>Password Requirements:
+                </h6>
+                <ul class="requirements-list">
+                  <li :class="{ 'met': isRequirementMet('length') }">
+                    <i :class="isRequirementMet('length') ? 'fas fa-check' : 'fas fa-times'"></i>
+                    At least 8 characters long
+                  </li>
+                  <li :class="{ 'met': isRequirementMet('uppercase') }">
+                    <i :class="isRequirementMet('uppercase') ? 'fas fa-check' : 'fas fa-times'"></i>
+                    Contains uppercase letter
+                  </li>
+                  <li :class="{ 'met': isRequirementMet('lowercase') }">
+                    <i :class="isRequirementMet('lowercase') ? 'fas fa-check' : 'fas fa-times'"></i>
+                    Contains lowercase letter
+                  </li>
+                  <li :class="{ 'met': isRequirementMet('number') }">
+                    <i :class="isRequirementMet('number') ? 'fas fa-check' : 'fas fa-times'"></i>
+                    Contains number
+                  </li>
+                </ul>
+              </div>
             </div>
             
             <div class="form-group mb-4">
@@ -145,10 +170,35 @@ const form = reactive({
 const errors = reactive({})
 const successMsg = ref('')
 
+// 密码验证函数
+function isRequirementMet(requirement) {
+  const password = form.password
+  switch (requirement) {
+    case 'length':
+      return password.length >= 8
+    case 'uppercase':
+      return /[A-Z]/.test(password)
+    case 'lowercase':
+      return /[a-z]/.test(password)
+    case 'number':
+      return /\d/.test(password)
+    default:
+      return false
+  }
+}
+
+// 密码是否有效
+function isPasswordValid() {
+  return form.password.length >= 8 &&
+         /[A-Z]/.test(form.password) &&
+         /[a-z]/.test(form.password) &&
+         /\d/.test(form.password)
+}
+
 function validate() {
   errors.username = form.username ? '' : 'Username is required.'
   errors.email = form.email ? (/^\S+@\S+\.\S+$/.test(form.email) ? '' : 'Invalid email format.') : 'Email is required.'
-  errors.password = form.password ? (form.password.length >= 6 ? '' : 'Password must be at least 6 characters.') : 'Password is required.'
+  errors.password = form.password ? (isPasswordValid() ? '' : 'Password does not meet requirements.') : 'Password is required.'
   errors.confirmPassword = form.confirmPassword ? (form.confirmPassword === form.password ? '' : 'Passwords do not match.') : 'Please confirm your password.'
   errors.role = form.role ? '' : 'Role is required.'
   return !errors.username && !errors.email && !errors.password && !errors.confirmPassword && !errors.role
@@ -354,6 +404,52 @@ function handleRegister() {
 .alert-success {
   background: rgba(72, 187, 120, 0.1);
   color: #2f855a;
+}
+
+/* 密码要求样式 */
+.password-requirements {
+  background: rgba(248, 249, 250, 0.8);
+  border-radius: 12px;
+  padding: 1rem;
+  border-left: 4px solid #667eea;
+}
+
+.requirements-title {
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.requirements-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: #718096;
+  font-size: 0.85rem;
+}
+
+.requirements-list li.met {
+  color: #38a169;
+}
+
+.requirements-list li i {
+  font-size: 0.8rem;
+}
+
+.requirements-list li.met i {
+  color: #38a169;
+}
+
+.requirements-list li:not(.met) i {
+  color: #e53e3e;
 }
 
 @media (max-width: 768px) {
