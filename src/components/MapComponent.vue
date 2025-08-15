@@ -17,46 +17,37 @@
           </div>
         </div>
         
-        <!-- 主要功能按钮组 -->
+        <!-- 功能按钮 -->
         <div class="col-md-6">
           <div class="d-flex justify-content-end gap-2">
-            <!-- 位置相关按钮 -->
-            <div class="btn-group me-2" role="group">
-              <button 
-                class="btn btn-primary" 
-                @click="getCurrentLocation"
-                title="Get current location"
-              >
-                <i class="fas fa-location-arrow me-1"></i>My Location
-              </button>
-              <button 
-                class="btn btn-outline-info" 
-                @click="resetLocationPermission"
-                title="Reset location permission"
-              >
-                <i class="fas fa-key me-1"></i>Reset Permission
-              </button>
-            </div>
-            
-            <!-- 地图操作按钮 -->
-            <div class="btn-group me-2" role="group">
-              <button 
-                class="btn btn-outline-success" 
-                @click="clearMarkers"
-                title="Clear markers"
-              >
-                <i class="fas fa-trash me-1"></i>Clear Markers
-              </button>
-              <button 
-                class="btn btn-outline-warning" 
-                @click="exportMapData"
-                title="Export map data"
-              >
-                <i class="fas fa-download me-1"></i>Export
-              </button>
-            </div>
-            
-            <!-- 路线规划按钮 -->
+            <button 
+              class="btn btn-primary" 
+              @click="getCurrentLocation"
+              title="Get current location"
+            >
+              <i class="fas fa-location-arrow me-1"></i>My Location
+            </button>
+            <button 
+              class="btn btn-outline-info" 
+              @click="resetLocationPermission"
+              title="Reset location permission"
+            >
+              <i class="fas fa-key me-1"></i>Reset Permission
+            </button>
+            <button 
+              class="btn btn-outline-success" 
+              @click="clearMarkers"
+              title="Clear markers"
+            >
+              <i class="fas fa-trash me-1"></i>Clear Markers
+            </button>
+            <button 
+              class="btn btn-outline-warning" 
+              @click="exportMapData"
+              title="Export map data"
+            >
+              <i class="fas fa-download me-1"></i>Export
+            </button>
             <button 
               class="btn btn-outline-secondary" 
               @click="showRoutePanel = !showRoutePanel"
@@ -704,9 +695,9 @@ function resetLocationPermission() {
 
 .map-controls {
   background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 15px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
 }
 
 .search-box {
@@ -724,59 +715,14 @@ function resetLocationPermission() {
 
 .search-input {
   padding-left: 35px;
-  border-radius: 25px;
-  border: 2px solid #e9ecef;
-  transition: all 0.3s ease;
-  height: 45px;
-  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  transition: border-color 0.2s ease;
 }
 
 .search-input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-}
-
-/* 按钮组样式 */
-.btn-group {
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.btn-group .btn {
-  border: none;
-  padding: 0.6rem 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-group .btn:first-child {
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
-}
-
-.btn-group .btn:last-child {
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-
-.btn-group .btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* 主要按钮样式 */
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: white;
-  font-weight: 600;
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 /* 响应式设计 */
@@ -793,21 +739,12 @@ function resetLocationPermission() {
     justify-content: center !important;
   }
   
-  .btn-group {
-    margin-bottom: 0.5rem;
-  }
-  
   .map-container {
     height: 300px;
   }
   
   .route-panel .row {
     flex-direction: column;
-  }
-  
-  .search-input {
-    height: 40px;
-    font-size: 0.9rem;
   }
 }
 
