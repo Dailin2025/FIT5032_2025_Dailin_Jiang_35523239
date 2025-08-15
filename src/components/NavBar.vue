@@ -34,18 +34,15 @@ const currentUser = ref(null)
 const router = useRouter()
 
 function loadUser() {
-  console.log('Loading user in NavBar...')
   if (window.authService) {
     const user = window.authService.getCurrentUser()
-    console.log('NavBar - Current user:', user)
-    currentUser.value = user
-  } else {
-    console.log('Auth service not available in NavBar')
+    if (user !== currentUser.value) {
+      currentUser.value = user
+    }
   }
 }
 
 function handleAuthChange(event) {
-  console.log('Auth change event received:', event.detail)
   currentUser.value = event.detail.user
 }
 
@@ -62,19 +59,12 @@ async function signOut() {
 }
 
 onMounted(() => {
-  console.log('NavBar mounted, loading user...')
   loadUser()
-  
-  // 监听认证状态变化
   window.addEventListener('auth-change', handleAuthChange)
-  
-  // 定期检查用户状态（作为备用方案）
-  const interval = setInterval(loadUser, 2000)
-  
-  onUnmounted(() => {
-    clearInterval(interval)
-    window.removeEventListener('auth-change', handleAuthChange)
-  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('auth-change', handleAuthChange)
 })
 </script>
 

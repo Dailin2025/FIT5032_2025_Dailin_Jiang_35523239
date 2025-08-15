@@ -293,25 +293,68 @@ export class MapService {
         return
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy
+      // Check if geolocation permission is granted
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
+          if (permissionStatus.state === 'denied') {
+            reject(new Error('Geolocation permission denied. Please enable location access in your browser settings.'))
+            return
           }
-          resolve({ success: true, location })
-        },
-        (error) => {
-          reject(new Error(`Failed to get location: ${error.message}`))
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        }
-      )
+          
+          if (permissionStatus.state === 'prompt') {
+            // Permission not yet requested, will prompt user
+            console.log('Requesting geolocation permission...')
+          }
+          
+          // Proceed with getting location
+          this.requestLocation(resolve, reject)
+        }).catch(() => {
+          // Fallback if permissions API is not supported
+          this.requestLocation(resolve, reject)
+        })
+      } else {
+        // Fallback for browsers that don't support permissions API
+        this.requestLocation(resolve, reject)
+      }
     })
+  }
+
+  // Helper method to request location
+  requestLocation(resolve, reject) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        }
+        resolve({ success: true, location })
+      },
+      (error) => {
+        let errorMessage = 'Failed to get location'
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please enable location permissions in your browser settings.'
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable. Please try again.'
+            break
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.'
+            break
+          default:
+            errorMessage = `Location error: ${error.message}`
+        }
+        
+        reject(new Error(errorMessage))
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    )
   }
 
   // Calculate distance between two points
