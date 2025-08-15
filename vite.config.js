@@ -19,14 +19,16 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['vue', 'vue-router'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          utils: ['html2canvas', 'purify'],
+          icons: ['@fortawesome/fontawesome-free']
         }
       }
     }
-  },
-  base: './'
+  }
 })
