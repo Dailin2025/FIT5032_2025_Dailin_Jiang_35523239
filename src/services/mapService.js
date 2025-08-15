@@ -368,6 +368,57 @@ export class MapService {
     )
   }
 
+  // Reset location permission (attempt to re-request)
+  async resetLocationPermission() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Browser does not support geolocation'))
+        return
+      }
+
+      // Check if we're on HTTPS
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        reject(new Error('Geolocation requires HTTPS connection'))
+        return
+      }
+
+      // Try to reset permission by making a new request
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
+          if (permissionStatus.state === 'denied') {
+            // Try to reset by requesting again (this might work in some browsers)
+            this.requestLocation(
+              (result) => resolve({ success: true, message: 'Permission reset successful' }),
+              (error) => {
+                if (error.message.includes('permission denied')) {
+                  reject(new Error('Permission still denied. Please manually enable location access in your browser settings:\n\n1. Click the 🔒 icon in the address bar\n2. Set "Location" to "Allow"\n3. Refresh the page'))
+                } else {
+                  reject(error)
+                }
+              }
+            )
+          } else if (permissionStatus.state === 'prompt') {
+            resolve({ success: true, message: 'Permission is now in prompt state. Try clicking "My Location" again.' })
+          } else {
+            resolve({ success: true, message: 'Permission already granted' })
+          }
+        }).catch(() => {
+          // Fallback for browsers that don't support permissions API
+          this.requestLocation(
+            (result) => resolve({ success: true, message: 'Permission reset successful' }),
+            (error) => reject(error)
+          )
+        })
+      } else {
+        // Fallback for browsers that don't support permissions API
+        this.requestLocation(
+          (result) => resolve({ success: true, message: 'Permission reset successful' }),
+          (error) => reject(error)
+        )
+      }
+    })
+  }
+
   // Calculate distance between two points
   calculateDistance(point1, point2) {
     const R = 6371 // Earth radius (kilometers)

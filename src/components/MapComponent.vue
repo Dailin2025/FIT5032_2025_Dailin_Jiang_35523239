@@ -26,6 +26,13 @@
               <i class="fas fa-location-arrow me-1"></i>My Location
             </button>
             <button 
+              class="btn btn-outline-info me-2" 
+              @click="resetLocationPermission"
+              title="Reset location permission"
+            >
+              <i class="fas fa-key me-1"></i>Reset Permission
+            </button>
+            <button 
               class="btn btn-outline-success" 
               @click="clearMarkers"
               title="Clear markers"
@@ -664,6 +671,19 @@ function getPlaceTypeName(type) {
     shop: 'Shop'
   }
   return typeNames[type] || 'Other'
+}
+
+function resetLocationPermission() {
+  showInfo('Attempting to reset location permission...')
+  mapService.resetLocationPermission()
+    .then(() => {
+      showSuccess('Location permission reset successfully! Please refresh the page to apply changes.')
+      console.log('Location permission reset successfully.')
+    })
+    .catch(error => {
+      showError('Failed to reset location permission: ' + error)
+      console.error('Failed to reset location permission:', error)
+    })
 }
 </script>
 
