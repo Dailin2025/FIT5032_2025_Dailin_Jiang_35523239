@@ -25,8 +25,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['vue', 'vue-router'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          utils: ['html2canvas', 'purify'],
-          icons: ['@fortawesome/fontawesome-free']
+          ui: ['bootstrap', '@fortawesome/fontawesome-free']
         }
       }
     }
