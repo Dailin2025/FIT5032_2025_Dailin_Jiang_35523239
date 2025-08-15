@@ -86,8 +86,8 @@
                 <div class="rating-section">
                   <div class="average-rating">
                     <i class="fas fa-star me-1"></i>
-                    <span v-if="getAverageRating(volunteer.id) !== null">
-                      {{ getAverageRating(volunteer.id).toFixed(1) }} / 5
+                    <span v-if="volunteerRatings[volunteer.id] && volunteerRatings[volunteer.id].average !== null">
+                      {{ volunteerRatings[volunteer.id].average.toFixed(1) }} / 5
                     </span>
                     <span v-else>No ratings yet</span>
                   </div>
@@ -115,12 +115,19 @@
                     <i class="fas fa-comments me-1"></i>Comments
                   </button>
                   <button 
-                    v-if="canDeleteVolunteer(volunteer)" 
+                    v-if="canDeleteVolunteerSync(volunteer)" 
                     class="btn btn-outline-danger action-btn" 
                     @click="deleteVolunteer(volunteer.id)"
                   >
                     <i class="fas fa-trash me-1"></i>Delete
                   </button>
+                  
+                  <!-- Debug info -->
+                  <div class="debug-info" style="font-size: 10px; color: #666; margin-top: 5px;">
+                    Creator: {{ volunteer.creator }}<br>
+                    Current User: {{ currentUser?.email }}<br>
+                    Can Delete: {{ canDeleteVolunteer(volunteer) }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -197,12 +204,15 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
+import firestoreService from '@/services/firestoreService.js'
 
 const volunteers = ref([])
 const newVolunteer = reactive({ name: '', skill: '', contact: '', description: '' })
 const errors = reactive({ name: '', skill: '', contact: '', description: '' })
 const userRatings = reactive({})
+const volunteerRatings = ref({})
 const currentUser = ref(null)
+const userPermissions = ref({ admin: false, doctor: false })
 
 const selectedDescription = ref(null)
 const selectedVolunteerForDescription = ref(null)
@@ -217,25 +227,86 @@ const commentsForSelectedVolunteer = computed(() => {
 
 const canComment = computed(() => {
   const user = currentUser.value
-  return user && (user.role === 'user' || user.role === 'doctor')
+  return !!user // 登录用户都可以评论
 })
 
 function getCurrentUser() {
-  const user = localStorage.getItem('currentUser')
-  return user ? JSON.parse(user) : null
+  // Get user from auth service instead of localStorage
+  const user = window.authService ? window.authService.getCurrentUser() : null
+  return user
 }
 
-// 所有已登录用户和管理员可以添加志愿者信息
+// 所有已登录用户可以添加志愿者信息
 const canAddVolunteer = computed(() => {
   const user = currentUser.value
-  return user && (user.role === 'admin' || user.role === 'user' || user.role === 'doctor')
+  return !!user
 })
 
-// 只有创建者或管理员可以删除志愿者信息
-function canDeleteVolunteer(volunteer) {
+// 检查用户权限
+async function checkUserPermissions() {
+  if (currentUser.value && window.authService) {
+    try {
+      const isAdmin = await window.authService.hasRole('admin')
+      const isDoctor = await window.authService.hasRole('doctor')
+      userPermissions.value = { admin: isAdmin, doctor: isDoctor }
+      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+    } catch (error) {
+      console.error('Error checking permissions:', error)
+      userPermissions.value = { admin: false, doctor: false }
+    }
+  }
+}
+
+// 同步版本的删除权限检查
+function canDeleteVolunteerSync(volunteer) {
   const user = currentUser.value
   if (!user) return false
-  return user.role === 'admin' || volunteer.creator === user.username
+  
+  // 使用已缓存的权限信息
+  if (userPermissions.value.admin) return true
+  
+  if (userPermissions.value.doctor) {
+    // Doctors can only delete their own entries
+    const userEmail = user.email
+    const userDisplayName = user.displayName
+    return volunteer.creator === userEmail || volunteer.creator === userDisplayName
+  }
+  
+  // Regular users can only delete their own entries
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  return volunteer.creator === userEmail || volunteer.creator === userDisplayName
+}
+
+// 只有创建者或管理员可以删除志愿者信息
+async function canDeleteVolunteer(volunteer) {
+  const user = currentUser.value
+  if (!user) return false
+  
+  try {
+    // Check if user is admin
+    if (window.authService) {
+      const isAdmin = await window.authService.hasRole('admin')
+      if (isAdmin) return true
+      
+      // Check if user is doctor
+      const isDoctor = await window.authService.hasRole('doctor')
+      if (isDoctor) {
+        // Doctors can only delete their own entries
+        const userEmail = user.email
+        const userDisplayName = user.displayName
+        return volunteer.creator === userEmail || volunteer.creator === userDisplayName
+      }
+    }
+    
+    // Regular users can only delete their own entries
+    const userEmail = user.email
+    const userDisplayName = user.displayName
+    return volunteer.creator === userEmail || volunteer.creator === userDisplayName
+  } catch (error) {
+    console.error('Error checking delete permissions:', error)
+    return false
+  }
 }
 
 // 任何已登录用户都可以给志愿者打分
@@ -269,76 +340,213 @@ function validate() {
   return !errors.name && !errors.skill && !errors.contact && !errors.description;
 }
 
-function loadVolunteers() {
-  const saved = localStorage.getItem('volunteers')
-  volunteers.value = saved ? JSON.parse(saved) : [
-    { id: 1, name: 'Alice', skill: 'Companionship', contact: '111-222-3333', description: 'Friendly and great listener.', creator: 'admin' },
-    { id: 2, name: 'Bob', skill: 'Tech Support', contact: '444-555-6666', description: 'Helps with smartphones and computers.', creator: 'admin' }
-  ]
-}
-function saveVolunteers() {
-  localStorage.setItem('volunteers', JSON.stringify(volunteers.value))
-}
-
-function loadRatings() {
-  const saved = localStorage.getItem('volunteerRatings')
-  return saved ? JSON.parse(saved) : {}
-}
-function saveRatings(ratings) {
-  localStorage.setItem('volunteerRatings', JSON.stringify(ratings))
+async function loadVolunteerRatings() {
+  try {
+    const ratings = await loadRatings()
+    for (const volunteer of volunteers.value) {
+      if (ratings[volunteer.id] && ratings[volunteer.id].length > 0) {
+        const sum = ratings[volunteer.id].reduce((acc, r) => acc + r.score, 0)
+        const average = sum / ratings[volunteer.id].length
+        volunteerRatings.value[volunteer.id] = { average: average, count: ratings[volunteer.id].length }
+      } else {
+        volunteerRatings.value[volunteer.id] = { average: null, count: 0 }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load volunteer ratings:', error)
+  }
 }
 
-function loadVolunteerComments() {
-  const saved = localStorage.getItem('volunteerComments')
-  volunteerComments.value = saved ? JSON.parse(saved) : {}
+async function loadVolunteers() {
+  try {
+    // Try to get data from Firestore
+    const result = await firestoreService.getVolunteers()
+    
+    if (result.success && result.data.length > 0) {
+      // Fix existing data that might be missing creator field
+      const fixedVolunteers = result.data.map(volunteer => {
+        if (!volunteer.creator) {
+          volunteer.creator = 'admin@example.com' // Default creator for existing data
+        }
+        return volunteer
+      })
+      volunteers.value = fixedVolunteers
+    } else {
+      // If Firestore has no data, create initial data
+      const initialVolunteers = [
+        { name: 'Alice', skill: 'Companionship', contact: '111-222-3333', description: 'Friendly and great listener.', creator: 'admin@example.com' },
+        { name: 'Bob', skill: 'Tech Support', contact: '444-555-6666', description: 'Helps with smartphones and computers.', creator: 'admin@example.com' }
+      ]
+      
+      // Save initial data to Firestore
+      for (const volunteer of initialVolunteers) {
+        await firestoreService.createVolunteer(volunteer)
+      }
+      
+      // Re-fetch data
+      const newResult = await firestoreService.getVolunteers()
+      if (newResult.success) {
+        volunteers.value = newResult.data
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load volunteers:', error)
+    volunteers.value = []
+  }
+  
+  // Load ratings after loading volunteers
+  await loadVolunteerRatings()
 }
 
-function saveVolunteerComments() {
-  localStorage.setItem('volunteerComments', JSON.stringify(volunteerComments.value))
+async function saveVolunteers() {
+  try {
+    // Data is already managed by Firestore service
+    console.log('Volunteers saved to Firestore')
+  } catch (error) {
+    console.error('Failed to save volunteers:', error)
+  }
 }
 
-function addVolunteer() {
+async function loadRatings() {
+  try {
+    const result = await firestoreService.getVolunteerRatings()
+    return result.success ? result.data : {}
+  } catch (error) {
+    console.error('Failed to load ratings:', error)
+    return {}
+  }
+}
+
+async function saveRatings(ratings) {
+  try {
+    await firestoreService.saveVolunteerRatings(ratings)
+  } catch (error) {
+    console.error('Failed to save ratings:', error)
+  }
+}
+
+async function loadVolunteerComments() {
+  try {
+    // Load comments for all volunteers
+    const allComments = {}
+    
+    for (const volunteer of volunteers.value) {
+      const result = await firestoreService.getVolunteerCommentsFromSubcollection(volunteer.id)
+      if (result.success) {
+        allComments[volunteer.id] = result.data
+      } else {
+        allComments[volunteer.id] = []
+      }
+    }
+    
+    volunteerComments.value = allComments
+  } catch (error) {
+    console.error('Failed to load comments:', error)
+    volunteerComments.value = {}
+  }
+}
+
+async function saveVolunteerComments() {
+  try {
+    await firestoreService.saveVolunteerComments(volunteerComments.value)
+  } catch (error) {
+    console.error('Failed to save comments:', error)
+  }
+}
+
+async function addVolunteer() {
   if (!validate()) return
   const user = currentUser.value
   if (!user) return
-  const id = Date.now()
-  volunteers.value.push({ 
-    id, 
-    name: newVolunteer.name, 
-    skill: newVolunteer.skill,
-    contact: newVolunteer.contact,
-    description: newVolunteer.description,
-    creator: user.username 
-  })
-  saveVolunteers()
-  newVolunteer.name = ''
-  newVolunteer.skill = ''
-  newVolunteer.contact = ''
-  newVolunteer.description = ''
+  
+  try {
+    // Create volunteer data
+    const volunteerData = {
+      name: newVolunteer.name,
+      skill: newVolunteer.skill,
+      contact: newVolunteer.contact,
+      description: newVolunteer.description,
+      creator: user.displayName || user.email || 'Anonymous'
+    }
+    
+    // Save to Firestore
+    const result = await firestoreService.createVolunteer(volunteerData)
+    
+    if (result.success) {
+      // Add to local array with the ID from Firestore (at the end)
+      volunteers.value.push({
+        id: result.id,
+        ...volunteerData
+      })
+      
+      // Clear form
+      newVolunteer.name = ''
+      newVolunteer.skill = ''
+      newVolunteer.contact = ''
+      newVolunteer.description = ''
+      
+      // Show success message
+      showSuccess('Volunteer added successfully!')
+    } else {
+      alert('Failed to add volunteer: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error adding volunteer:', error)
+    alert('An error occurred while adding the volunteer')
+  }
 }
-function deleteVolunteer(id) {
+async function deleteVolunteer(id) {
   const user = currentUser.value
   if (!user) return
   const volunteer = volunteers.value.find(v => v.id === id)
   if (!volunteer) return
-  if (user.role !== 'admin' && volunteer.creator !== user.username) return
-  volunteers.value = volunteers.value.filter(v => v.id !== id)
-  saveVolunteers()
-  const ratings = loadRatings()
-  delete ratings[id]
-  saveRatings(ratings)
-  const comments = loadVolunteerComments()
-  delete comments[id]
-  saveVolunteerComments()
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  if (!window.authService?.hasRole('admin') && volunteer.creator !== userEmail && volunteer.creator !== userDisplayName) return
+  
+  try {
+    // Delete from Firestore
+    const result = await firestoreService.deleteVolunteer(id)
+    
+    if (result.success) {
+      // Remove from local array
+      volunteers.value = volunteers.value.filter(v => v.id !== id)
+      
+      // Clean up related ratings and comments with safety checks
+      try {
+        const ratings = await loadRatings()
+        if (ratings && typeof ratings === 'object') {
+          delete ratings[id]
+          await saveRatings(ratings)
+        }
+        
+        const comments = await loadVolunteerComments()
+        if (comments && typeof comments === 'object') {
+          delete comments[id]
+          await saveVolunteerComments()
+        }
+      } catch (cleanupError) {
+        console.warn('Warning: Failed to clean up related data:', cleanupError)
+        // Continue with deletion even if cleanup fails
+      }
+      
+      showSuccess('Volunteer deleted successfully!')
+    } else {
+      alert('Failed to delete volunteer: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting volunteer:', error)
+    alert('An error occurred while deleting the volunteer')
+  }
 }
-function rateVolunteer(volunteerId, score) {
+async function rateVolunteer(volunteerId, score) {
   const user = currentUser.value
   if (!user) return alert('Please log in to rate!')
   // 不再限制角色，任何已登录用户都可以评分
-  const ratings = loadRatings()
+  const ratings = await loadRatings()
   if (!ratings[volunteerId]) ratings[volunteerId] = []
 
-  const userKey = user.username + ':' + user.role
+  const userKey = user.email || user.displayName || 'Anonymous'
   const existingRatingIndex = ratings[volunteerId].findIndex(r => r.user === userKey)
 
   if (existingRatingIndex !== -1 && ratings[volunteerId][existingRatingIndex].score === score) {
@@ -354,19 +562,28 @@ function rateVolunteer(volunteerId, score) {
     userRatings[volunteerId] = score
   }
 
-  saveRatings(ratings)
+  await saveRatings(ratings)
+  
+  // Update volunteerRatings for this volunteer
+  if (ratings[volunteerId] && ratings[volunteerId].length > 0) {
+    const sum = ratings[volunteerId].reduce((acc, r) => acc + r.score, 0)
+    const average = sum / ratings[volunteerId].length
+    volunteerRatings.value[volunteerId] = { average: average, count: ratings[volunteerId].length }
+  } else {
+    volunteerRatings.value[volunteerId] = { average: null, count: 0 }
+  }
 }
-function getAverageRating(volunteerId) {
-  const ratings = loadRatings()
+async function getAverageRating(volunteerId) {
+  const ratings = await loadRatings()
   if (!ratings[volunteerId] || ratings[volunteerId].length === 0) return null
   const sum = ratings[volunteerId].reduce((acc, r) => acc + r.score, 0)
   return sum / ratings[volunteerId].length
 }
-function loadUserRatings() {
+async function loadUserRatings() {
   const user = currentUser.value
   if (!user) return
-  const ratings = loadRatings()
-  const userKey = user.username + ':' + user.role
+  const ratings = await loadRatings()
+  const userKey = user.email || user.displayName || 'Anonymous'
   for (const volunteerId in ratings) {
     const found = ratings[volunteerId].find(r => r.user === userKey)
     if (found) userRatings[volunteerId] = found.score
@@ -375,7 +592,16 @@ function loadUserRatings() {
 
 function canDeleteComment(comment) {
   const user = currentUser.value
-  return user && (user.username === comment.user || user.role === 'admin')
+  if (!user) return false
+  
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  
+  // Admin can delete any comment using cached permissions
+  if (userPermissions.value.admin) return true
+  
+  // Doctor and User can only delete their own comments
+  return comment.user === userEmail || comment.user === userDisplayName
 }
 
 function showDescription(volunteer) {
@@ -397,40 +623,81 @@ function closeComments() {
   newCommentText.value = ''
 }
 
-function addComment() {
+async function addComment() {
   const user = currentUser.value
   if (!canComment.value || !newCommentText.value.trim()) return
 
-  const volunteerId = selectedVolunteerForComments.value.id
-  if (!volunteerComments.value[volunteerId]) {
-    volunteerComments.value[volunteerId] = []
+  try {
+    const volunteerId = selectedVolunteerForComments.value.id
+    const comment = {
+      user: user.displayName || user.email || 'Anonymous',
+      text: newCommentText.value.trim()
+    }
+    
+    // Save comment to Firestore
+    const result = await firestoreService.addVolunteerComment(volunteerId, comment)
+    
+    if (result.success) {
+      // Get updated comments for the current volunteer
+      const commentsResult = await firestoreService.getVolunteerCommentsFromSubcollection(volunteerId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        volunteerComments.value = {
+          ...volunteerComments.value,
+          [volunteerId]: commentsResult.data
+        }
+      }
+      
+      newCommentText.value = ''
+      showSuccess('Comment added successfully!')
+    } else {
+      alert('Failed to add comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error adding comment:', error)
+    alert('An error occurred while adding comment')
   }
-  
-  volunteerComments.value[volunteerId].push({
-    user: user.username,
-    text: newCommentText.value
-  })
-  
-  saveVolunteerComments()
-  newCommentText.value = ''
 }
 
-function deleteComment(commentIndex) {
-  const volunteerId = selectedVolunteerForComments.value.id
-  if (!volunteerComments.value[volunteerId]) return
-
-  volunteerComments.value[volunteerId].splice(commentIndex, 1)
-
-  saveVolunteerComments()
+async function deleteComment(commentIndex) {
+  try {
+    const volunteerId = selectedVolunteerForComments.value.id
+    const comment = volunteerComments.value[volunteerId]?.[commentIndex]
+    if (!comment) return
+    
+    // Delete comment from Firestore
+    const result = await firestoreService.deleteVolunteerComment(volunteerId, comment.id)
+    
+    if (result.success) {
+      // Get updated comments for the current volunteer
+      const commentsResult = await firestoreService.getVolunteerCommentsFromSubcollection(volunteerId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        volunteerComments.value = {
+          ...volunteerComments.value,
+          [volunteerId]: commentsResult.data
+        }
+      }
+      
+      showSuccess('Comment deleted successfully!')
+    } else {
+      alert('Failed to delete comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    alert('An error occurred while deleting comment')
+  }
 }
 
-onMounted(() => {
+onMounted(async () => {
   currentUser.value = getCurrentUser()
-  loadVolunteers()
-  loadUserRatings()
-  loadVolunteerComments()
-  window.addEventListener('auth-changed', () => {
+  await checkUserPermissions()
+  await loadVolunteers()
+  await loadUserRatings()
+  await loadVolunteerComments()
+  window.addEventListener('auth-change', () => {
     currentUser.value = getCurrentUser()
+    checkUserPermissions() // 重新检查权限
   })
 })
 </script>

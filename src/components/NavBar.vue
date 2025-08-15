@@ -9,7 +9,7 @@
       </ul>
       <span class="navbar-text ms-auto d-flex align-items-center gap-2">
         <button class="btn btn-primary rounded-pill px-4" disabled>
-          Welcome, {{ currentUser ? currentUser.username : 'Guest' }}!
+          Welcome, {{ currentUser ? (currentUser.displayName || currentUser.email) : 'Guest' }}!
         </button>
         <button v-if="currentUser" class="btn btn-outline-secondary rounded-pill px-4 ms-2" @click="signOut">Sign out</button>
       </span>
@@ -31,18 +31,26 @@ const menu = [
 const currentUser = ref(null)
 const router = useRouter()
 function loadUser() {
-  const user = localStorage.getItem('currentUser')
-  currentUser.value = user ? JSON.parse(user) : null
+  // Get user from auth service instead of localStorage
+  if (window.authService) {
+    currentUser.value = window.authService.getCurrentUser()
+  }
 }
-function signOut() {
-  localStorage.removeItem('currentUser')
-  window.__auth = { isAuthenticated: false, user: null }
-  window.dispatchEvent(new Event('auth-changed'))
-  router.push('/')
+
+async function signOut() {
+  try {
+    if (window.authService) {
+      await window.authService.logout()
+    }
+    currentUser.value = null
+    router.push('/')
+  } catch (error) {
+    console.error('Sign out error:', error)
+  }
 }
 onMounted(() => {
   loadUser()
-  window.addEventListener('auth-changed', loadUser)
+  window.addEventListener('auth-change', loadUser)
 })
 </script>
 

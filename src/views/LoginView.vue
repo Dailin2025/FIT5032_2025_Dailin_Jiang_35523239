@@ -97,22 +97,29 @@ function validate() {
   return !errors.email && !errors.password
 }
 
-function handleLogin() {
+async function handleLogin() {
   if (!validate()) return
-  const users = JSON.parse(localStorage.getItem('users') || '[]')
-  const user = users.find(u => u.email === form.email && u.password === form.password)
-  if (!user) {
-    errorMsg.value = 'Invalid email or password.'
-    return
+  
+  try {
+    if (window.authService) {
+      const result = await window.authService.loginWithEmail(form.email, form.password)
+      
+      if (result.success) {
+        successMsg.value = 'Login successful! Redirecting...'
+        errorMsg.value = ''
+        setTimeout(() => {
+          router.push('/')
+        }, 1000)
+      } else {
+        errorMsg.value = result.error
+      }
+    } else {
+      errorMsg.value = 'Authentication service not available.'
+    }
+  } catch (error) {
+    console.error('Login error:', error)
+    errorMsg.value = 'An error occurred during login.'
   }
-  localStorage.setItem('currentUser', JSON.stringify(user))
-  window.__auth = { isAuthenticated: true, user }
-  window.dispatchEvent(new Event('auth-changed'))
-  successMsg.value = 'Login successful! Redirecting...'
-  errorMsg.value = ''
-  setTimeout(() => {
-    router.push('/')
-  }, 1000)
 }
 </script>
 

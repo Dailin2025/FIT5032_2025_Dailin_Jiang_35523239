@@ -203,8 +203,10 @@ const errors = reactive({
 
 // 获取当前用户信息
 function getCurrentUser() {
-  const user = localStorage.getItem('currentUser')
-  return user ? JSON.parse(user) : null
+  if (window.authService) {
+    return window.authService.getCurrentUser()
+  }
+  return null
 }
 
 // 获取角色样式类
@@ -289,16 +291,20 @@ function confirmLogout() {
 }
 
 // 登出
-function logout() {
-  localStorage.removeItem('currentUser')
-  window.__auth = { isAuthenticated: false, user: null }
-  window.dispatchEvent(new Event('auth-changed'))
-  router.push('/')
+async function logout() {
+  try {
+    if (window.authService) {
+      await window.authService.logout()
+    }
+    router.push('/')
+  } catch (error) {
+    console.error('Logout error:', error)
+  }
 }
 
 onMounted(() => {
   currentUser.value = getCurrentUser()
-  window.addEventListener('auth-changed', () => {
+  window.addEventListener('auth-change', () => {
     currentUser.value = getCurrentUser()
   })
 })

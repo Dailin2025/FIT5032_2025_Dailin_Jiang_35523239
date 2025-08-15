@@ -64,11 +64,13 @@
       <!-- 美化后的医生卡片 -->
       <div class="doctors-section">
         <div class="section-header mb-4">
-          <h2 class="section-title">
-            <i class="fas fa-user-md me-2"></i>
-            Available Doctors
-          </h2>
-          <p class="section-subtitle">Find and book appointments with our qualified medical professionals</p>
+          <div>
+            <h2 class="section-title">
+              <i class="fas fa-user-md me-2"></i>
+              Available Doctors
+            </h2>
+            <p class="section-subtitle">Find and book appointments with our qualified medical professionals</p>
+          </div>
         </div>
         
         <div class="row">
@@ -97,8 +99,8 @@
                 <div class="rating-section">
                   <div class="average-rating">
                     <i class="fas fa-star me-1"></i>
-                    <span v-if="getAverageRating(doctor.id) !== null">
-                      {{ getAverageRating(doctor.id).toFixed(1) }} / 5
+                    <span v-if="doctorRatings[doctor.id] && doctorRatings[doctor.id].average !== null">
+                      {{ doctorRatings[doctor.id].average.toFixed(1) }} / 5
                     </span>
                     <span v-else>No ratings yet</span>
                   </div>
@@ -126,7 +128,7 @@
                     <i class="fas fa-comments me-1"></i>Comments
                   </button>
                   <button 
-                    v-if="canDeleteDoctor(doctor)" 
+                    v-if="canDeleteDoctorSync(doctor)" 
                     class="btn btn-outline-danger action-btn" 
                     @click="deleteDoctor(doctor.id)"
                   >
@@ -160,6 +162,94 @@
         </div>
       </div>
       
+      <!-- 添加医生模态框 -->
+      <div v-if="showAddDoctorModal" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content custom-modal">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="fas fa-user-plus me-2"></i>Add New Doctor
+              </h5>
+              <button type="button" class="btn-close" @click="closeAddDoctorModal"></button>
+            </div>
+            <div class="modal-body">
+              <form @submit.prevent="addDoctor">
+                <div class="mb-3">
+                  <label class="form-label">Doctor Name *</label>
+                  <input 
+                    v-model="newDoctor.name" 
+                    type="text" 
+                    class="form-control" 
+                    :class="{ 'is-invalid': errors.name }"
+                    placeholder="e.g., Dr. Johnson"
+                    required
+                  />
+                  <div v-if="errors.name" class="invalid-feedback">{{ errors.name }}</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label class="form-label">Specialty *</label>
+                  <input 
+                    v-model="newDoctor.specialty" 
+                    type="text" 
+                    class="form-control" 
+                    :class="{ 'is-invalid': errors.specialty }"
+                    placeholder="e.g., Cardiology"
+                    required
+                  />
+                  <div v-if="errors.specialty" class="invalid-feedback">{{ errors.specialty }}</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label class="form-label">Description</label>
+                  <textarea 
+                    v-model="newDoctor.description" 
+                    class="form-control" 
+                    rows="3"
+                    placeholder="Brief description of the doctor's expertise..."
+                  ></textarea>
+                </div>
+                
+                <div class="mb-3">
+                  <label class="form-label">Contact Number *</label>
+                  <input 
+                    v-model="newDoctor.contact" 
+                    type="tel" 
+                    class="form-control" 
+                    :class="{ 'is-invalid': errors.contact }"
+                    placeholder="e.g., 123-456-7890"
+                    required
+                  />
+                  <div v-if="errors.contact" class="invalid-feedback">{{ errors.contact }}</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label class="form-label">Email *</label>
+                  <input 
+                    v-model="newDoctor.email" 
+                    type="email" 
+                    class="form-control" 
+                    :class="{ 'is-invalid': errors.email }"
+                    placeholder="e.g., doctor@hospital.com"
+                    required
+                  />
+                  <div v-if="errors.email" class="invalid-feedback">{{ errors.email }}</div>
+                </div>
+                
+                <div class="modal-footer border-0 px-0 pb-0">
+                  <button type="button" class="btn btn-secondary" @click="closeAddDoctorModal">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-2"></i>Add Doctor
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 美化后的Comments Modal -->
       <div v-if="selectedDoctor" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -220,17 +310,20 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
+import firestoreService from '@/services/firestoreService.js'
 
 const doctors = ref([])
 const newDoctor = reactive({ name: '', specialty: '', description: '', contact: '', email: '' })
 const errors = reactive({ name: '', specialty: '', description: '', contact: '', email: '' })
 const userRatings = reactive({})
+const doctorRatings = ref({})
 const currentUser = ref(null)
 const selectedDoctor = ref(null)
 const newCommentText = ref('')
 const doctorComments = ref({})
 const selectedDescription = ref(null)
 const selectedDoctorForDescription = ref(null)
+const showAddDoctorModal = ref(false)
 
 const commentsForSelectedDoctor = computed(() => {
   if (!selectedDoctor.value) return []
@@ -239,30 +332,85 @@ const commentsForSelectedDoctor = computed(() => {
 
 const canComment = computed(() => {
   const user = currentUser.value
-  return user && user.role === 'user' // 只有普通用户可以评论
+  return !!user // 登录用户都可以评论
 })
 
 function getCurrentUser() {
-  const user = localStorage.getItem('currentUser')
-  return user ? JSON.parse(user) : null
+  // Get user from auth service instead of localStorage
+  const user = window.authService ? window.authService.getCurrentUser() : null
+  return user
 }
 
-const canAddDoctor = computed(() => {
-  const user = currentUser.value
-  return user && (user.role === 'admin' || user.role === 'doctor')
-})
+const canAddDoctor = ref(false)
+const userPermissions = ref({ admin: false, doctor: false })
 
-function canDeleteDoctor(doctor) {
+// 检查用户权限
+async function checkUserPermissions() {
+  if (currentUser.value && window.authService) {
+    try {
+      const isAdmin = await window.authService.hasRole('admin')
+      const isDoctor = await window.authService.hasRole('doctor')
+      canAddDoctor.value = isAdmin || isDoctor
+      userPermissions.value = { admin: isAdmin, doctor: isDoctor }
+      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+    } catch (error) {
+      console.error('Error checking permissions:', error)
+      canAddDoctor.value = false
+      userPermissions.value = { admin: false, doctor: false }
+    }
+  }
+}
+
+// 同步版本的删除权限检查
+function canDeleteDoctorSync(doctor) {
   const user = currentUser.value
   if (!user) return false
-  return user.role === 'admin' || doctor.creator === user.username
+  
+  // 使用已缓存的权限信息
+  if (userPermissions.value.admin) return true
+  
+  if (userPermissions.value.doctor) {
+    // Doctors can only delete their own entries
+    const userEmail = user.email
+    const userDisplayName = user.displayName
+    return doctor.creator === userEmail || doctor.creator === userDisplayName
+  }
+  
+  return false
+}
+
+async function canDeleteDoctor(doctor) {
+  const user = currentUser.value
+  if (!user) return false
+  
+  try {
+    if (window.authService) {
+      // Check if user is admin
+      const isAdmin = await window.authService.hasRole('admin')
+      if (isAdmin) return true
+      
+      // Check if user is doctor
+      const isDoctor = await window.authService.hasRole('doctor')
+      if (isDoctor) {
+        // Doctors can only delete their own entries
+        const userEmail = user.email
+        const userDisplayName = user.displayName
+        return doctor.creator === userEmail || doctor.creator === userDisplayName
+      }
+    }
+    
+    // Regular users cannot delete doctors
+    return false
+  } catch (error) {
+    console.error('Error checking delete permissions:', error)
+    return false
+  }
 }
 
 function canRateDoctor(doctor) {
   const user = currentUser.value
   if (!user) return false
-  if (user.role === 'user') return true
-  return false
+  return true // 登录用户都可以评分
 }
 
 function validate() {
@@ -299,32 +447,120 @@ function validate() {
   return !errors.name && !errors.specialty && !errors.description && !errors.contact && !errors.email;
 }
 
-function loadDoctors() {
-  const saved = localStorage.getItem('doctors')
-  doctors.value = saved ? JSON.parse(saved) : [
-    { id: 1, name: 'Dr. Smith', specialty: 'Cardiology', description: 'Expert in heart-related issues.', contact: '123-456-7890', email: 'dr.smith@example.com', creator: 'admin' },
-    { id: 2, name: 'Dr. Lee', specialty: 'Neurology', description: 'Specializes in brain and nervous system disorders.', contact: '098-765-4321', email: 'dr.lee@example.com', creator: 'admin' }
-  ]
-}
-function saveDoctors() {
-  localStorage.setItem('doctors', JSON.stringify(doctors.value))
+async function loadDoctors() {
+  try {
+    // Try to get data from Firestore
+    const result = await firestoreService.getDoctors()
+    
+    if (result.success && result.data.length > 0) {
+      doctors.value = result.data
+      
+      // Load ratings for all doctors
+      await loadDoctorRatings()
+    } else {
+      // If Firestore has no data, create initial data
+      const initialDoctors = [
+        { name: 'Dr. Smith', specialty: 'Cardiology', description: 'Expert in heart-related issues.', contact: '123-456-7890', email: 'dr.smith@example.com', creator: 'admin' },
+        { name: 'Dr. Lee', specialty: 'Neurology', description: 'Specializes in brain and nervous system disorders.', contact: '098-765-4321', email: 'dr.lee@example.com', creator: 'admin' }
+      ]
+      
+      // Save initial data to Firestore
+      for (const doctor of initialDoctors) {
+        await firestoreService.createDoctor(doctor)
+      }
+      
+      // Re-fetch data
+      const newResult = await firestoreService.getDoctors()
+      if (newResult.success) {
+        doctors.value = newResult.data
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load doctors:', error)
+    doctors.value = []
+  }
 }
 
-function loadRatings() {
-  const saved = localStorage.getItem('doctorRatings')
-  return saved ? JSON.parse(saved) : {}
-}
-function saveRatings(ratings) {
-  localStorage.setItem('doctorRatings', JSON.stringify(ratings))
-}
-
-function loadDoctorComments() {
-  const saved = localStorage.getItem('doctorComments')
-  doctorComments.value = saved ? JSON.parse(saved) : {}
+async function saveDoctors() {
+  try {
+    // Data is already managed by Firestore service
+    console.log('Doctors saved to Firestore')
+  } catch (error) {
+    console.error('Failed to save doctors:', error)
+  }
 }
 
-function saveDoctorComments() {
-  localStorage.setItem('doctorComments', JSON.stringify(doctorComments.value))
+async function loadRatings() {
+  try {
+    const result = await firestoreService.getDoctorRatings()
+    return result.success ? result.data : {}
+  } catch (error) {
+    console.error('Failed to load ratings:', error)
+    return {}
+  }
+}
+
+async function loadDoctorRatings() {
+  try {
+    const ratings = await loadRatings()
+    
+    // Calculate average ratings for each doctor
+    for (const doctor of doctors.value) {
+      if (ratings[doctor.id] && ratings[doctor.id].length > 0) {
+        const sum = ratings[doctor.id].reduce((acc, r) => acc + r.score, 0)
+        const average = sum / ratings[doctor.id].length
+        
+        doctorRatings.value[doctor.id] = {
+          average: average,
+          count: ratings[doctor.id].length
+        }
+      } else {
+        doctorRatings.value[doctor.id] = {
+          average: null,
+          count: 0
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load doctor ratings:', error)
+  }
+}
+
+async function saveRatings(ratings) {
+  try {
+    await firestoreService.saveDoctorRatings(ratings)
+  } catch (error) {
+    console.error('Failed to save ratings:', error)
+  }
+}
+
+async function loadDoctorComments() {
+  try {
+    // Load comments for all doctors
+    const allComments = {}
+    
+    for (const doctor of doctors.value) {
+      const result = await firestoreService.getDoctorCommentsFromSubcollection(doctor.id)
+      if (result.success) {
+        allComments[doctor.id] = result.data
+      } else {
+        allComments[doctor.id] = []
+      }
+    }
+    
+    doctorComments.value = allComments
+  } catch (error) {
+    console.error('Failed to load comments:', error)
+    doctorComments.value = {}
+  }
+}
+
+async function saveDoctorComments() {
+  try {
+    await firestoreService.saveDoctorComments(doctorComments.value)
+  } catch (error) {
+    console.error('Failed to save comments:', error)
+  }
 }
 
 function showComments(doctor) {
@@ -336,75 +572,172 @@ function closeComments() {
   newCommentText.value = ''
 }
 
-function addComment() {
+function closeAddDoctorModal() {
+  showAddDoctorModal.value = false
+  // 重置表单
+  Object.keys(newDoctor).forEach(key => {
+    newDoctor[key] = ''
+  })
+  Object.keys(errors).forEach(key => {
+    errors[key] = ''
+  })
+}
+
+async function addComment() {
   const user = currentUser.value
   if (!canComment.value || !newCommentText.value.trim()) return
 
-  const doctorId = selectedDoctor.value.id
-  if (!doctorComments.value[doctorId]) {
-    doctorComments.value[doctorId] = []
+  try {
+    const doctorId = selectedDoctor.value.id
+    const comment = {
+      user: user.displayName || user.email || 'Anonymous',
+      text: newCommentText.value.trim()
+    }
+    
+    // Save comment to Firestore
+    const result = await firestoreService.addDoctorComment(doctorId, comment)
+    
+    if (result.success) {
+      // Get updated comments for the current doctor
+      const commentsResult = await firestoreService.getDoctorCommentsFromSubcollection(doctorId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        doctorComments.value = {
+          ...doctorComments.value,
+          [doctorId]: commentsResult.data
+        }
+      }
+      
+      newCommentText.value = ''
+      showSuccess('Comment added successfully!')
+    } else {
+      alert('Failed to add comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error adding comment:', error)
+    alert('An error occurred while adding comment')
   }
-  
-  doctorComments.value[doctorId].push({
-    user: user.username,
-    text: newCommentText.value
-  })
-  
-  saveDoctorComments()
-  newCommentText.value = ''
 }
 
-function deleteComment(commentIndex) {
-  const doctorId = selectedDoctor.value.id
-  if (!doctorComments.value[doctorId]) return
-
-  doctorComments.value[doctorId].splice(commentIndex, 1)
-
-  saveDoctorComments()
+async function deleteComment(commentIndex) {
+  try {
+    const doctorId = selectedDoctor.value.id
+    const comment = doctorComments.value[doctorId]?.[commentIndex]
+    if (!comment) return
+    
+    // Delete comment from Firestore
+    const result = await firestoreService.deleteDoctorComment(doctorId, comment.id)
+    
+    if (result.success) {
+      // Get updated comments for the current doctor
+      const commentsResult = await firestoreService.getDoctorCommentsFromSubcollection(doctorId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        doctorComments.value = {
+          ...doctorComments.value,
+          [doctorId]: commentsResult.data
+        }
+      }
+      
+      showSuccess('Comment deleted successfully!')
+    } else {
+      alert('Failed to delete comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    alert('An error occurred while deleting comment')
+  }
 }
 
-function addDoctor() {
+async function addDoctor() {
   if (!validate()) return
   const user = currentUser.value
   if (!user) return
-  const id = Date.now()
-  doctors.value.push({ 
-    id, 
-    name: newDoctor.name, 
-    specialty: newDoctor.specialty, 
-    description: newDoctor.description,
-    contact: newDoctor.contact,
-    email: newDoctor.email,
-    creator: user.username 
-  })
-  saveDoctors()
-  newDoctor.name = ''
-  newDoctor.specialty = ''
-  newDoctor.description = ''
-  newDoctor.contact = ''
-  newDoctor.email = ''
+  
+  try {
+    // Create doctor data
+    const doctorData = {
+      name: newDoctor.name,
+      specialty: newDoctor.specialty,
+      description: newDoctor.description,
+      contact: newDoctor.contact,
+      email: newDoctor.email,
+      creator: user.displayName || user.email || 'Anonymous'
+    }
+    
+    // Save to Firestore
+    const result = await firestoreService.createDoctor(doctorData)
+    
+    if (result.success) {
+      // Add to local array with the ID from Firestore (at the end)
+      doctors.value.push({
+        id: result.id,
+        ...doctorData
+      })
+      
+      // Clear form
+      newDoctor.name = ''
+      newDoctor.specialty = ''
+      newDoctor.description = ''
+      newDoctor.contact = ''
+      newDoctor.email = ''
+      
+      // Show success message
+      showSuccess('Doctor added successfully!')
+    } else {
+      alert('Failed to add doctor: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error adding doctor:', error)
+    alert('An error occurred while adding the doctor')
+  }
 }
-function deleteDoctor(id) {
+async function deleteDoctor(id) {
   const user = currentUser.value
   if (!user) return
   const doctor = doctors.value.find(d => d.id === id)
   if (!doctor) return
-  if (user.role !== 'admin' && doctor.creator !== user.username) return
-  doctors.value = doctors.value.filter(d => d.id !== id)
-  saveDoctors()
-  const ratings = loadRatings()
-  delete ratings[id]
-  saveRatings(ratings)
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  if (!window.authService?.hasRole('admin') && doctor.creator !== userEmail && doctor.creator !== userDisplayName) return
+  
+  try {
+    // Delete from Firestore
+    const result = await firestoreService.deleteDoctor(id)
+    
+    if (result.success) {
+      // Remove from local array
+      doctors.value = doctors.value.filter(d => d.id !== id)
+      
+      // Clean up related ratings with safety checks
+      try {
+        const ratings = await loadRatings()
+        if (ratings && typeof ratings === 'object') {
+          delete ratings[id]
+          await saveRatings(ratings)
+        }
+      } catch (cleanupError) {
+        console.warn('Warning: Failed to clean up related ratings:', cleanupError)
+        // Continue with deletion even if cleanup fails
+      }
+      
+      showSuccess('Doctor deleted successfully!')
+    } else {
+      alert('Failed to delete doctor: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting doctor:', error)
+    alert('An error occurred while deleting the doctor')
+  }
 }
-function rateDoctor(doctorId, score) {
+async function rateDoctor(doctorId, score) {
   const user = currentUser.value
   if (!user) return alert('Please log in to rate!')
-  if (user.role !== 'user') return
 
-  const ratings = loadRatings()
+  const ratings = await loadRatings()
   if (!ratings[doctorId]) ratings[doctorId] = []
 
-  const userKey = user.username + ':' + user.role
+  const userKey = user.email || user.displayName || 'Anonymous'
   const existingRatingIndex = ratings[doctorId].findIndex(r => r.user === userKey)
 
   if (existingRatingIndex !== -1 && ratings[doctorId][existingRatingIndex].score === score) {
@@ -420,19 +753,35 @@ function rateDoctor(doctorId, score) {
     userRatings[doctorId] = score
   }
 
-  saveRatings(ratings)
+  await saveRatings(ratings)
+  
+  // Update doctorRatings for the specific doctor
+  if (ratings[doctorId] && ratings[doctorId].length > 0) {
+    const sum = ratings[doctorId].reduce((acc, r) => acc + r.score, 0)
+    const average = sum / ratings[doctorId].length
+    
+    doctorRatings.value[doctorId] = {
+      average: average,
+      count: ratings[doctorId].length
+    }
+  } else {
+    doctorRatings.value[doctorId] = {
+      average: null,
+      count: 0
+    }
+  }
 }
-function getAverageRating(doctorId) {
-  const ratings = loadRatings()
+async function getAverageRating(doctorId) {
+  const ratings = await loadRatings()
   if (!ratings[doctorId] || ratings[doctorId].length === 0) return null
   const sum = ratings[doctorId].reduce((acc, r) => acc + r.score, 0)
   return sum / ratings[doctorId].length
 }
-function loadUserRatings() {
+async function loadUserRatings() {
   const user = currentUser.value
   if (!user) return
-  const ratings = loadRatings()
-  const userKey = user.username + ':' + user.role
+  const ratings = await loadRatings()
+  const userKey = user.email || user.displayName || 'Anonymous'
   for (const doctorId in ratings) {
     const found = ratings[doctorId].find(r => r.user === userKey)
     if (found) userRatings[doctorId] = found.score
@@ -451,16 +800,27 @@ function closeDescription() {
 
 function canDeleteComment(comment) {
   const user = currentUser.value
-  return user && (user.username === comment.user || user.role === 'admin')
+  if (!user) return false
+  
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  
+  // Admin can delete any comment using cached permissions
+  if (userPermissions.value.admin) return true
+  
+  // Doctor and User can only delete their own comments
+  return comment.user === userEmail || comment.user === userDisplayName
 }
 
-onMounted(() => {
+onMounted(async () => {
   currentUser.value = getCurrentUser()
-  loadDoctors()
-  loadUserRatings()
-  loadDoctorComments()
-  window.addEventListener('auth-changed', () => {
+  await checkUserPermissions()
+  await loadDoctors()
+  await loadUserRatings()
+  await loadDoctorComments()
+  window.addEventListener('auth-change', () => {
     currentUser.value = getCurrentUser()
+    checkUserPermissions() // 重新检查权限
   })
 })
 </script>

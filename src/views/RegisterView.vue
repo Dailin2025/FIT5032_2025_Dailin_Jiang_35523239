@@ -147,6 +147,10 @@
             <div class="alert alert-success mt-3" v-if="successMsg" role="alert">
               <i class="fas fa-check-circle me-2"></i>{{ successMsg }}
             </div>
+            
+            <div class="alert alert-danger mt-3" v-if="errorMsg" role="alert">
+              <i class="fas fa-exclamation-triangle me-2"></i>{{ errorMsg }}
+            </div>
           </form>
         </div>
       </div>
@@ -169,6 +173,7 @@ const form = reactive({
 })
 const errors = reactive({})
 const successMsg = ref('')
+const errorMsg = ref('')
 
 // 密码验证函数
 function isRequirementMet(requirement) {
@@ -204,20 +209,35 @@ function validate() {
   return !errors.username && !errors.email && !errors.password && !errors.confirmPassword && !errors.role
 }
 
-function handleRegister() {
+async function handleRegister() {
   if (!validate()) return
-  const users = JSON.parse(localStorage.getItem('users') || '[]')
-  users.push({ ...form })
-  localStorage.setItem('users', JSON.stringify(users))
-  successMsg.value = 'Registration successful! Redirecting to login...'
-  setTimeout(() => {
-  router.push('/login')
-  }, 1000)
-  form.username = ''
-  form.email = ''
-  form.password = ''
-  form.confirmPassword = ''
-  form.role = ''
+  
+  try {
+          if (window.authService) {
+        const result = await window.authService.registerWithEmail(form.email, form.password, form.username, form.role)
+      
+      if (result.success) {
+        successMsg.value = 'Registration successful! Please check your email for verification, then login.'
+        setTimeout(() => {
+          router.push('/login')
+        }, 2000)
+        
+        // Clear form
+        form.username = ''
+        form.email = ''
+        form.password = ''
+        form.confirmPassword = ''
+        form.role = ''
+      } else {
+        errorMsg.value = result.error
+      }
+    } else {
+      errorMsg.value = 'Authentication service not available.'
+    }
+  } catch (error) {
+    console.error('Registration error:', error)
+    errorMsg.value = 'An error occurred during registration.'
+  }
 }
 </script>
 

@@ -10,14 +10,15 @@ const isAuthenticated = ref(false)
 const currentUser = ref(null)
 
 const checkAuth = () => {
-  const user = localStorage.getItem('currentUser')
+  // Get user from auth service instead of localStorage
+  const user = window.authService ? window.authService.getCurrentUser() : null
   isAuthenticated.value = !!user
-  currentUser.value = user ? JSON.parse(user) : null
+  currentUser.value = user
 }
 
 onMounted(() => {
   checkAuth()
-  window.addEventListener('auth-changed', checkAuth)
+  window.addEventListener('auth-change', checkAuth)
 })
 
 const cards = [
@@ -107,7 +108,7 @@ const cards = [
           <div class="welcome-icon">
             <i class="fas fa-home"></i>
           </div>
-          <h1 class="welcome-back">Welcome back, {{ currentUser?.username || 'User' }}!</h1>
+          <h1 class="welcome-back">Welcome back, {{ currentUser?.displayName || currentUser?.email || 'User' }}!</h1>
           <p class="welcome-subtitle">Explore our services below</p>
         </div>
       </div>

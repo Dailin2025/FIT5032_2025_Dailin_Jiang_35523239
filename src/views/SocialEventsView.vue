@@ -101,6 +101,10 @@
           <p class="section-subtitle">Join our community activities and stay connected</p>
         </div>
         
+
+        
+
+        
         <div class="row">
           <div class="col-4 mb-4" v-for="event in events" :key="event.id">
             <div class="event-card">
@@ -120,8 +124,8 @@
                 <div class="rating-section">
                   <div class="average-rating">
                     <i class="fas fa-star me-1"></i>
-                    <span v-if="getAverageRating(event.id) !== null">
-                      {{ getAverageRating(event.id).toFixed(1) }} / 5
+                    <span v-if="eventRatings[event.id] && eventRatings[event.id].average !== null">
+                      {{ eventRatings[event.id].average.toFixed(1) }} / 5
                     </span>
                     <span v-else>No ratings yet</span>
                   </div>
@@ -148,7 +152,7 @@
                     <i class="fas fa-comments me-1"></i>Comments
                   </button>
                   <button 
-                    v-if="canDeleteEvent(event)" 
+                    v-if="canDeleteEventSync(event)" 
                     class="btn btn-outline-danger action-btn" 
                     @click="deleteEvent(event.id)"
                   >
@@ -245,12 +249,15 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import socialEventsImage from '@/asserts/pexels-photo-3768131.jpeg'
+import firestoreService from '@/services/firestoreService.js'
 
 const events = ref([])
 const newEvent = reactive({ title: '', desc: '', date: '', time: '' })
 const errors = reactive({ title: '', desc: '', date: '', time: '' })
 const userRatings = reactive({})
+const eventRatings = ref({})
 const currentUser = ref(null)
+const userPermissions = ref({ admin: false, doctor: false })
 const selectedDescription = ref(null)
 const selectedEventForDescription = ref(null)
 const selectedEventForComments = ref(null)
@@ -265,59 +272,219 @@ const commentsForSelectedEvent = computed(() => {
 
 const canComment = computed(() => {
   const user = currentUser.value
-  return user && (user.role === 'user' || user.role === 'doctor')
+  return !!user // 登录用户都可以评论
 })
 
 function canDeleteComment(comment) {
   const user = currentUser.value
-  return user && (user.username === comment.user || user.role === 'admin')
+  if (!user) return false
+  
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  
+  // Admin can delete any comment using cached permissions
+  if (userPermissions.value.admin) return true
+  
+  // Doctor and User can only delete their own comments
+  return comment.user === userEmail || comment.user === userDisplayName
 }
 
 function getCurrentUser() {
-  const user = localStorage.getItem('currentUser')
-  return user ? JSON.parse(user) : null
+  // Get user from auth service instead of localStorage
+  const user = window.authService ? window.authService.getCurrentUser() : null
+  return user
 }
 
-// 只有已登录用户（user/doctor/admin）可以添加活动
+// 只有已登录用户可以添加活动
 const canAddEvent = computed(() => {
   const user = currentUser.value
-  return user && (user.role === 'admin' || user.role === 'user' || user.role === 'doctor')
+  return !!user
 })
 
-// 只有活动创建者（user/doctor）或管理员可以删除活动
-function canDeleteEvent(event) {
+// 检查用户权限
+async function checkUserPermissions() {
+  if (currentUser.value && window.authService) {
+    try {
+      const isAdmin = await window.authService.hasRole('admin')
+      const isDoctor = await window.authService.hasRole('doctor')
+      userPermissions.value = { admin: isAdmin, doctor: isDoctor }
+      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+    } catch (error) {
+      console.error('Error checking permissions:', error)
+      userPermissions.value = { admin: false, doctor: false }
+    }
+  }
+}
+
+// 同步版本的删除权限检查
+function canDeleteEventSync(event) {
   const user = currentUser.value
   if (!user) return false
-  return user.role === 'admin' || event.creator === user.username
+  
+  // 使用已缓存的权限信息
+  if (userPermissions.value.admin) return true
+  
+  if (userPermissions.value.doctor) {
+    // Doctors can only delete their own events
+    const userEmail = user.email
+    const userDisplayName = user.displayName
+    return event.creator === userEmail || event.creator === userDisplayName
+  }
+  
+  // Regular users can only delete their own events
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  return event.creator === userEmail || event.creator === userDisplayName
 }
 
-function loadEvents() {
-  const saved = localStorage.getItem('events')
-  events.value = saved ? JSON.parse(saved) : [
-    { id: 1, title: 'Morning Tai Chi', desc: 'Join us for a healthy start to your day with Tai Chi in the park.', date: '2024-10-26', time: '09:00', creator: 'admin' },
-    { id: 2, title: 'Online Book Club', desc: 'Discuss your favorite books with fellow readers online.', date: '2024-10-27', time: '18:30', creator: 'admin' },
-    { id: 3, title: 'Cooking Workshop', desc: 'Learn to cook healthy meals with our volunteer chefs.', date: '2024-10-28', time: '15:00', creator: 'admin' }
-  ]
-}
-function saveEvents() {
-  localStorage.setItem('events', JSON.stringify(events.value))
+// 只有活动创建者或管理员可以删除活动
+async function canDeleteEvent(event) {
+  const user = currentUser.value
+  if (!user) return false
+  
+  try {
+    // Check if user is admin
+    if (window.authService) {
+      const isAdmin = await window.authService.hasRole('admin')
+      if (isAdmin) return true
+      
+      // Check if user is doctor
+      const isDoctor = await window.authService.hasRole('doctor')
+      if (isDoctor) {
+        // Doctors can only delete their own events
+        const userEmail = user.email
+        const userDisplayName = user.displayName
+        return event.creator === userEmail || event.creator === userDisplayName
+      }
+    }
+    
+    // Regular users can only delete their own events
+    const userEmail = user.email
+    const userDisplayName = user.displayName
+    return event.creator === userEmail || event.creator === userDisplayName
+  } catch (error) {
+    console.error('Error checking delete permissions:', error)
+    return false
+  }
 }
 
-function loadRatings() {
-  const saved = localStorage.getItem('eventRatings')
-  return saved ? JSON.parse(saved) : {}
-}
-function saveRatings(ratings) {
-  localStorage.setItem('eventRatings', JSON.stringify(ratings))
+async function loadEvents() {
+  try {
+    // Try to get data from Firestore
+    const result = await firestoreService.getEvents()
+    
+    if (result.success && result.data.length > 0) {
+      events.value = result.data
+      
+      // Load ratings for all events
+      await loadEventRatings()
+    } else {
+      // If Firestore has no data, create initial data
+      const initialEvents = [
+        { title: 'Morning Tai Chi', desc: 'Join us for a healthy start to your day with Tai Chi in the park.', date: '2024-10-26', time: '09:00', creator: 'admin' },
+        { title: 'Online Book Club', desc: 'Discuss your favorite books with fellow readers online.', date: '2024-10-27', time: '18:30', creator: 'admin' },
+        { title: 'Cooking Workshop', desc: 'Learn to cook healthy meals with our volunteer chefs.', date: '2024-10-28', time: '15:00', creator: 'admin' }
+      ]
+      
+      // Save initial data to Firestore
+      for (const event of initialEvents) {
+        await firestoreService.createEvent(event)
+      }
+      
+      // Re-fetch data
+      const newResult = await firestoreService.getEvents()
+      if (newResult.success) {
+        events.value = newResult.data
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load events:', error)
+    events.value = []
+  }
 }
 
-function loadEventComments() {
-  const saved = localStorage.getItem('eventComments')
-  eventComments.value = saved ? JSON.parse(saved) : {}
+async function saveEvents() {
+  try {
+    // Data is already managed by Firestore service
+    console.log('Events saved to Firestore')
+  } catch (error) {
+    console.error('Failed to save events:', error)
+  }
 }
 
-function saveEventComments() {
-  localStorage.setItem('eventComments', JSON.stringify(eventComments.value))
+async function loadRatings() {
+  try {
+    const result = await firestoreService.getEventRatings()
+    return result.success ? result.data : {}
+  } catch (error) {
+    console.error('Failed to load ratings:', error)
+    return {}
+  }
+}
+
+async function loadEventRatings() {
+  try {
+    const ratings = await loadRatings()
+    
+    // Calculate average ratings for each event
+    for (const event of events.value) {
+      if (ratings[event.id] && ratings[event.id].length > 0) {
+        const sum = ratings[event.id].reduce((acc, r) => acc + r.score, 0)
+        const average = sum / ratings[event.id].length
+        
+        eventRatings.value[event.id] = {
+          average: average,
+          count: ratings[event.id].length
+        }
+      } else {
+        eventRatings.value[event.id] = {
+          average: null,
+          count: 0
+        }
+      }
+    }
+    
+    console.log('Event ratings loaded:', eventRatings.value)
+  } catch (error) {
+    console.error('Failed to load event ratings:', error)
+  }
+}
+
+async function saveRatings(ratings) {
+  try {
+    await firestoreService.saveEventRatings(ratings)
+  } catch (error) {
+    console.error('Failed to save ratings:', error)
+  }
+}
+
+async function loadEventComments() {
+  try {
+    // Load comments for all events
+    const allComments = {}
+    
+    for (const event of events.value) {
+      const result = await firestoreService.getEventCommentsFromSubcollection(event.id)
+      if (result.success) {
+        allComments[event.id] = result.data
+      } else {
+        allComments[event.id] = []
+      }
+    }
+    
+    eventComments.value = allComments
+  } catch (error) {
+    console.error('Failed to load comments:', error)
+    eventComments.value = {}
+  }
+}
+
+async function saveEventComments() {
+  try {
+    await firestoreService.saveEventComments(eventComments.value)
+  } catch (error) {
+    console.error('Failed to save comments:', error)
+  }
 }
 
 function formatDateTime(date, time) {
@@ -356,38 +523,99 @@ function validate() {
   return !errors.title && !errors.desc && !errors.date && !errors.time;
 }
 
-function addEvent() {
+async function addEvent() {
   if (!validate()) return
   const user = currentUser.value
   if (!user) return
-  const id = Date.now()
-  events.value.push({ id, title: newEvent.title, desc: newEvent.desc, date: newEvent.date, time: newEvent.time, creator: user.username })
-  saveEvents()
-  newEvent.title = ''
-  newEvent.desc = ''
-  newEvent.date = ''
-  newEvent.time = ''
+  
+  try {
+    // Create event data
+    const eventData = {
+      title: newEvent.title,
+      desc: newEvent.desc,
+      date: newEvent.date,
+      time: newEvent.time,
+      creator: user.displayName || user.email || 'Anonymous'
+    }
+    
+    // Save to Firestore
+    const result = await firestoreService.createEvent(eventData)
+    
+    if (result.success) {
+      // Create the new event object with the ID from Firestore
+      const newEventObj = {
+        id: result.id,
+        ...eventData
+      }
+      
+      // Force Vue reactivity by creating a new array (add at the end)
+      events.value = [...events.value, newEventObj]
+      
+      // Clear form
+      newEvent.title = ''
+      newEvent.desc = ''
+      newEvent.date = ''
+      newEvent.time = ''
+      
+      // Show success message
+      showSuccess('Event created successfully!')
+    } else {
+      alert('Failed to create event: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error creating event:', error)
+    alert('An error occurred while creating the event')
+  }
 }
-function deleteEvent(id) {
+async function deleteEvent(id) {
   const user = currentUser.value
   if (!user) return
   const event = events.value.find(e => e.id === id)
   if (!event) return
-  if (user.role !== 'admin' && event.creator !== user.username) return
-  events.value = events.value.filter(e => e.id !== id)
-  saveEvents()
-  const ratings = loadRatings()
-  delete ratings[id]
-  saveRatings(ratings)
+  const userEmail = user.email
+  const userDisplayName = user.displayName
+  if (!window.authService?.hasRole('admin') && event.creator !== userEmail && event.creator !== userDisplayName) return
+  
+  try {
+    // Delete from Firestore
+    const result = await firestoreService.deleteEvent(id)
+    
+    if (result.success) {
+      // Force Vue reactivity by creating a new filtered array
+      events.value = events.value.filter(e => e.id !== id)
+      
+      // Clean up related ratings with safety checks
+      try {
+        const ratings = await loadRatings()
+        if (ratings && typeof ratings === 'object') {
+          delete ratings[id]
+          await saveRatings(ratings)
+        }
+      } catch (cleanupError) {
+        console.warn('Warning: Failed to clean up related ratings:', cleanupError)
+        // Continue with deletion even if cleanup fails
+      }
+      
+      showSuccess('Event deleted successfully!')
+      
+      // Debug: log the current events array
+      console.log('Current events after deletion:', events.value)
+    } else {
+      alert('Failed to delete event: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting event:', error)
+    alert('An error occurred while deleting the event')
+  }
 }
-function rateEvent(eventId, score) {
+async function rateEvent(eventId, score) {
   const user = currentUser.value
   if (!user) return alert('Please log in to rate!')
 
-  const ratings = loadRatings()
+  const ratings = await loadRatings()
   if (!ratings[eventId]) ratings[eventId] = []
 
-  const userKey = user.username + ':' + user.role
+  const userKey = user.email || user.displayName || 'Anonymous'
   const existingRatingIndex = ratings[eventId].findIndex(r => r.user === userKey)
 
   if (existingRatingIndex !== -1 && ratings[eventId][existingRatingIndex].score === score) {
@@ -403,19 +631,35 @@ function rateEvent(eventId, score) {
     userRatings[eventId] = score
   }
 
-  saveRatings(ratings)
+  await saveRatings(ratings)
+  
+  // Update eventRatings for the specific event
+  if (ratings[eventId] && ratings[eventId].length > 0) {
+    const sum = ratings[eventId].reduce((acc, r) => acc + r.score, 0)
+    const average = sum / ratings[eventId].length
+    
+    eventRatings.value[eventId] = {
+      average: average,
+      count: ratings[eventId].length
+    }
+  } else {
+    eventRatings.value[eventId] = {
+      average: null,
+      count: 0
+    }
+  }
 }
-function getAverageRating(eventId) {
-  const ratings = loadRatings()
+async function getAverageRating(eventId) {
+  const ratings = await loadRatings()
   if (!ratings[eventId] || ratings[eventId].length === 0) return null
   const sum = ratings[eventId].reduce((acc, r) => acc + r.score, 0)
   return sum / ratings[eventId].length
 }
-function loadUserRatings() {
+async function loadUserRatings() {
   const user = currentUser.value
   if (!user) return
-  const ratings = loadRatings()
-  const userKey = user.username + ':' + user.role
+  const ratings = await loadRatings()
+  const userKey = user.email || user.displayName || 'Anonymous'
   for (const eventId in ratings) {
     const found = ratings[eventId].find(r => r.user === userKey)
     if (found) userRatings[eventId] = found.score
@@ -441,7 +685,7 @@ function closeComments() {
   newCommentText.value = ''
 }
 
-function addComment() {
+async function addComment() {
   commentError.value = ''
   const user = currentUser.value
   const commentWords = newCommentText.value.trim().split(/\s+/).filter(Boolean);
@@ -456,36 +700,77 @@ function addComment() {
     return
   }
 
-  const eventId = selectedEventForComments.value.id
-  if (!eventComments.value[eventId]) {
-    eventComments.value[eventId] = []
+  try {
+    const eventId = selectedEventForComments.value.id
+    const comment = {
+      user: user.displayName || user.email || 'Anonymous',
+      text: newCommentText.value.trim()
+    }
+    
+    // Save comment to Firestore
+    const result = await firestoreService.addEventComment(eventId, comment)
+    
+    if (result.success) {
+      // Get updated comments for the current event
+      const commentsResult = await firestoreService.getEventCommentsFromSubcollection(eventId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        eventComments.value = {
+          ...eventComments.value,
+          [eventId]: commentsResult.data
+        }
+      }
+      
+      newCommentText.value = ''
+      showSuccess('Comment added successfully!')
+    } else {
+      alert('Failed to add comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error adding comment:', error)
+    alert('An error occurred while adding comment')
   }
-  
-  eventComments.value[eventId].push({
-    user: user.username,
-    text: newCommentText.value
-  })
-  
-  saveEventComments()
-  newCommentText.value = ''
 }
 
-function deleteComment(commentIndex) {
-  const eventId = selectedEventForComments.value.id
-  if (!eventComments.value[eventId]) return
-
-  eventComments.value[eventId].splice(commentIndex, 1)
-
-  saveEventComments()
+async function deleteComment(commentIndex) {
+  try {
+    const eventId = selectedEventForComments.value.id
+    const comment = eventComments.value[eventId]?.[commentIndex]
+    if (!comment) return
+    
+    // Delete comment from Firestore
+    const result = await firestoreService.deleteEventComment(eventId, comment.id)
+    
+    if (result.success) {
+      // Get updated comments for the current event
+      const commentsResult = await firestoreService.getEventCommentsFromSubcollection(eventId)
+      if (commentsResult.success) {
+        // Force reactive update by creating a new object reference
+        eventComments.value = {
+          ...eventComments.value,
+          [eventId]: commentsResult.data
+        }
+      }
+      
+      showSuccess('Comment deleted successfully!')
+    } else {
+      alert('Failed to delete comment: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    alert('An error occurred while deleting comment')
+  }
 }
 
-onMounted(() => {
+onMounted(async () => {
   currentUser.value = getCurrentUser()
-  loadEvents()
-  loadUserRatings()
-  loadEventComments()
-  window.addEventListener('auth-changed', () => {
+  await checkUserPermissions()
+  await loadEvents()
+  await loadUserRatings()
+  await loadEventComments()
+  window.addEventListener('auth-change', () => {
     currentUser.value = getCurrentUser()
+    checkUserPermissions() // 重新检查权限
   })
 })
 </script>
