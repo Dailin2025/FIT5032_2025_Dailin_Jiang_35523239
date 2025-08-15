@@ -18,8 +18,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+
 const menu = [
   { text: 'Home', link: '/' },
   { text: 'Social Events', link: '/social-events' },
@@ -28,13 +29,24 @@ const menu = [
   { text: 'Avoid Scams', link: '/avoid-scams' },
   { text: 'My Account', link: '/my-account' }
 ]
+
 const currentUser = ref(null)
 const router = useRouter()
+
 function loadUser() {
-  // Get user from auth service instead of localStorage
+  console.log('Loading user in NavBar...')
   if (window.authService) {
-    currentUser.value = window.authService.getCurrentUser()
+    const user = window.authService.getCurrentUser()
+    console.log('NavBar - Current user:', user)
+    currentUser.value = user
+  } else {
+    console.log('Auth service not available in NavBar')
   }
+}
+
+function handleAuthChange(event) {
+  console.log('Auth change event received:', event.detail)
+  currentUser.value = event.detail.user
 }
 
 async function signOut() {
@@ -48,9 +60,21 @@ async function signOut() {
     console.error('Sign out error:', error)
   }
 }
+
 onMounted(() => {
+  console.log('NavBar mounted, loading user...')
   loadUser()
-  window.addEventListener('auth-change', loadUser)
+  
+  // 监听认证状态变化
+  window.addEventListener('auth-change', handleAuthChange)
+  
+  // 定期检查用户状态（作为备用方案）
+  const interval = setInterval(loadUser, 2000)
+  
+  onUnmounted(() => {
+    clearInterval(interval)
+    window.removeEventListener('auth-change', handleAuthChange)
+  })
 })
 </script>
 

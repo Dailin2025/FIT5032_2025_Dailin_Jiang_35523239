@@ -20,7 +20,7 @@ const routes = [
     path: '/about',
     name: 'About',
     component: AboutView,
-    meta: { requiresAuth: true, adminOnly: true }
+    meta: { requiresAuth: true, roles: ['admin'] }
   },
   {
     path: '/login',
@@ -41,31 +41,31 @@ const routes = [
     path: '/social-events',
     name: 'SocialEvents',
     component: SocialEventsView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
   },
   {
     path: '/book-doctor',
     name: 'BookDoctor',
     component: BookDoctorView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'admin'] }
   },
   {
     path: '/volunteer-help',
     name: 'VolunteerHelp',
     component: VolunteerHelpView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['user', 'volunteer', 'admin'] }
   },
   {
     path: '/avoid-scams',
     name: 'AvoidScams',
     component: AvoidScamsView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
   },
   {
     path: '/my-account',
     name: 'MyAccount',
     component: MyAccountView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
   }
 ]
 
@@ -89,47 +89,51 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth) {
     console.log('Route requires authentication')
     
-    // 等待认证服务初始化
-    let attempts = 0
-    const maxAttempts = 50 // 增加等待时间
-    
-    while (attempts < maxAttempts) {
-      if (window.authService && window.authService.isInitialized()) {
-        const user = window.authService.getCurrentUser()
-        console.log('Auth service initialized, current user:', user)
-        
-        if (user) {
-          // 用户已登录，检查特殊权限
-          if (to.meta.adminOnly) {
-            const hasAdminRole = await window.authService.hasRole('admin')
-            if (hasAdminRole) {
-              console.log('Admin access granted')
+    // 检查认证服务是否可用
+    if (window.authService) {
+      const user = window.authService.getCurrentUser()
+      console.log('Current user:', user)
+      
+      if (user) {
+        // 用户已登录，检查角色权限
+        if (to.meta.roles && to.meta.roles.length > 0) {
+          try {
+            // 检查用户是否有访问权限
+            let hasAccess = false
+            for (const role of to.meta.roles) {
+              const hasRole = await window.authService.hasRole(role)
+              if (hasRole) {
+                hasAccess = true
+                console.log(`User has role '${role}', access granted`)
+                break
+              }
+            }
+            
+            if (hasAccess) {
               next()
             } else {
-              console.log('Admin access denied, redirecting to access denied')
+              console.log('User does not have required roles, redirecting to access denied')
               next('/access-denied')
             }
-          } else {
-            console.log('Authenticated user, allowing access')
-            next()
+          } catch (error) {
+            console.error('Error checking user roles:', error)
+            next('/access-denied')
           }
         } else {
-          // 用户未登录，重定向到登录页
-          console.log('User not authenticated, redirecting to login')
-          next('/login')
+          // 没有角色要求，任何认证用户都可以访问
+          console.log('No role requirements, authenticated user allowed')
+          next()
         }
-        return
+      } else {
+        // 用户未登录，重定向到登录页
+        console.log('User not authenticated, redirecting to login')
+        next('/login')
       }
-      
-      // 等待认证服务初始化
-      console.log(`Auth service not ready, attempt ${attempts + 1}/${maxAttempts}`)
-      await new Promise(resolve => setTimeout(resolve, 200))
-      attempts++
+    } else {
+      // 认证服务不可用，重定向到登录页
+      console.log('Auth service not available, redirecting to login')
+      next('/login')
     }
-    
-    // 如果认证服务长时间未初始化，重定向到登录页
-    console.log('Auth service failed to initialize, redirecting to login')
-    next('/login')
     return
   }
   
