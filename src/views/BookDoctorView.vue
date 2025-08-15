@@ -358,10 +358,15 @@ async function checkUserPermissions() {
       const isAdmin = await window.authService.hasRole('admin')
       const isDoctor = await window.authService.hasRole('doctor')
       userPermissions.value = { admin: isAdmin, doctor: isDoctor }
+      
+      // 设置canAddDoctor权限 - Admin和Doctor都可以添加医生
+      canAddDoctor.value = isAdmin || isDoctor
+      
       lastCheckedUser.value = userEmail
     } catch (error) {
       console.error('Error checking permissions:', error)
       userPermissions.value = { admin: false, doctor: false }
+      canAddDoctor.value = false
     }
   }
 }

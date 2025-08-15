@@ -41,7 +41,7 @@ const routes = [
     path: '/social-events',
     name: 'SocialEvents',
     component: SocialEventsView,
-    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'admin'] }
   },
   {
     path: '/book-doctor',
@@ -53,19 +53,19 @@ const routes = [
     path: '/volunteer-help',
     name: 'VolunteerHelp',
     component: VolunteerHelpView,
-    meta: { requiresAuth: true, roles: ['user', 'volunteer', 'admin'] }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'admin'] }
   },
   {
     path: '/avoid-scams',
     name: 'AvoidScams',
     component: AvoidScamsView,
-    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'admin'] }
   },
   {
     path: '/my-account',
     name: 'MyAccount',
     component: MyAccountView,
-    meta: { requiresAuth: true, roles: ['user', 'doctor', 'volunteer', 'admin'] }
+    meta: { requiresAuth: true, roles: ['user', 'doctor', 'admin'] }
   }
 ]
 
