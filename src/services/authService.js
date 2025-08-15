@@ -45,10 +45,14 @@ export class AuthService {
         this.isInitialized = true
         console.log('Immediate user check - user found:', auth.currentUser)
       } else {
-        console.log('Immediate user check - no current user')
+        // 即使没有用户，也要标记为已初始化
+        this.isInitialized = true
+        console.log('Immediate user check - no current user, but auth initialized')
       }
     } catch (error) {
       console.error('Error checking current user:', error)
+      // 即使出错，也要标记为已初始化
+      this.isInitialized = true
     }
   }
 

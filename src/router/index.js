@@ -76,65 +76,66 @@ const router = createRouter({
 
 // 全局前置守卫
 router.beforeEach(async (to, from, next) => {
-  // 添加调试信息
   console.log('Route guard - navigating to:', to.path)
-  console.log('Auth service available:', typeof window !== 'undefined' && !!window.authService)
   
-  // 如果已经在登录页面，直接允许
-  if (to.path === '/login') {
-    console.log('Already on login page, allowing access')
+  // 公开页面，直接允许访问
+  if (to.path === '/login' || to.path === '/register' || to.path === '/access-denied') {
+    console.log('Public page, allowing access')
     next()
     return
   }
   
-  // 检查认证服务是否可用
-  if (typeof window !== 'undefined' && window.authService) {
-    // 等待 Firebase Auth 初始化完成
+  // 检查是否需要认证
+  if (to.meta.requiresAuth) {
+    console.log('Route requires authentication')
+    
+    // 等待认证服务初始化
     let attempts = 0
-    const maxAttempts = 10
+    const maxAttempts = 50 // 增加等待时间
     
     while (attempts < maxAttempts) {
-      const user = window.authService.getCurrentUser()
-      console.log(`Attempt ${attempts + 1}: Current user:`, user)
-      
-      if (user !== null) {
-        // 用户已加载，检查权限
-        const isAuthenticated = !!user
-        console.log('User loaded, is authenticated:', isAuthenticated)
+      if (window.authService && window.authService.isInitialized()) {
+        const user = window.authService.getCurrentUser()
+        console.log('Auth service initialized, current user:', user)
         
-        if (to.meta.requiresAuth && !isAuthenticated) {
-          console.log('Redirecting to login - requires auth but not authenticated')
-          next('/login')
-          return
-        } else if (to.meta.adminOnly && (!user || !window.authService.hasRole('admin'))) {
-          console.log('Redirecting to access denied - requires admin role')
-          next('/access-denied')
-          return
-        } else if (to.meta.userOnly && (!user || !window.authService.hasRole('user'))) {
-          console.log('Redirecting to access denied - requires user role')
-          next('/access-denied')
-          return
+        if (user) {
+          // 用户已登录，检查特殊权限
+          if (to.meta.adminOnly) {
+            const hasAdminRole = await window.authService.hasRole('admin')
+            if (hasAdminRole) {
+              console.log('Admin access granted')
+              next()
+            } else {
+              console.log('Admin access denied, redirecting to access denied')
+              next('/access-denied')
+            }
+          } else {
+            console.log('Authenticated user, allowing access')
+            next()
+          }
         } else {
-          console.log('Proceeding to route')
-          next()
-          return
+          // 用户未登录，重定向到登录页
+          console.log('User not authenticated, redirecting to login')
+          next('/login')
         }
+        return
       }
       
-      // 等待一下再试
-      console.log('User not loaded yet, waiting...')
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // 等待认证服务初始化
+      console.log(`Auth service not ready, attempt ${attempts + 1}/${maxAttempts}`)
+      await new Promise(resolve => setTimeout(resolve, 200))
       attempts++
     }
     
-    // 如果多次尝试后仍然没有用户，允许访问（开发环境）
-    console.log('Max attempts reached, allowing access')
-    next()
-  } else {
-    // 如果认证服务不可用，允许访问（开发环境）
-    console.log('Auth service not available, allowing access')
-    next()
+    // 如果认证服务长时间未初始化，重定向到登录页
+    console.log('Auth service failed to initialize, redirecting to login')
+    next('/login')
+    return
   }
+  
+  // 不需要认证的页面，允许访问
+  console.log('No auth required, allowing access')
+  next()
 })
 
 export default router
