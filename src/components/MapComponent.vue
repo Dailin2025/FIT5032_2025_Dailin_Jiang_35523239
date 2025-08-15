@@ -403,6 +403,7 @@ async function searchPlaces() {
 async function getCurrentLocation() {
   try {
     // Show loading state
+    showInfo('Requesting location permission...')
     
     const result = await mapService.getCurrentLocation()
     
@@ -459,16 +460,34 @@ async function getCurrentLocation() {
       }
       
       // Show success message with more details
-      const message = `Location found! You are at: ${result.location.lat.toFixed(4)}, ${result.location.lng.toFixed(4)}\n\nThis should be your actual location in Suzhou, not Beijing.`
+      const message = `Location found! You are at: ${result.location.lat.toFixed(4)}, ${result.location.lng.toFixed(4)}\n\nThis should be your actual location in Suzhou.`
       showInfo(message)
       
     } else {
       console.error('Failed to get location:', result.error)
-      showError('Failed to get your location. Please check your browser permissions.')
+      showError('Failed to get location: ' + result.error)
     }
   } catch (error) {
     console.error('Get location error:', error)
-    showError('Error getting location: ' + error.message)
+    
+    // Provide more user-friendly error messages
+    let userMessage = 'Error occurred while getting location'
+    
+    if (error.message.includes('HTTPS')) {
+      userMessage = '⚠️ Location feature requires HTTPS connection\n\nYour website is currently using HTTP connection, geolocation cannot work. Please ensure your website uses a secure connection.'
+    } else if (error.message.includes('permission denied')) {
+      userMessage = '🔒 Location permission denied\n\nPlease follow these steps:\n1. Click the 🔒 icon on the left side of the address bar\n2. Set "Location" permission to "Allow"\n3. Refresh the page and try again'
+    } else if (error.message.includes('does not support geolocation')) {
+      userMessage = '❌ Browser does not support geolocation\n\nPlease use modern browsers like Chrome, Firefox, Safari, etc.'
+    } else if (error.message.includes('timed out')) {
+      userMessage = '⏰ Location request timed out\n\nPlease check your network connection and try again, or try later.'
+    } else if (error.message.includes('unavailable')) {
+      userMessage = '📡 Location information unavailable\n\nPossible causes:\n• Network connection issues\n• Weak GPS signal\n• Browser geolocation service failure'
+    } else {
+      userMessage = `❌ Location error: ${error.message}\n\nPlease try refreshing the page or contact technical support.`
+    }
+    
+    showError(userMessage)
   }
 }
 

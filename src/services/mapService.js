@@ -289,7 +289,13 @@ export class MapService {
   async getCurrentLocation() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Browser does not support geolocation'))
+        reject(new Error('Your browser does not support geolocation. Please use a modern browser.'))
+        return
+      }
+
+      // Check if we're on HTTPS (required for geolocation in production)
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        reject(new Error('Geolocation requires HTTPS connection. Please ensure your website uses a secure connection.'))
         return
       }
 
@@ -297,23 +303,28 @@ export class MapService {
       if (navigator.permissions) {
         navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
           if (permissionStatus.state === 'denied') {
-            reject(new Error('Geolocation permission denied. Please enable location access in your browser settings.'))
+            reject(new Error('Location permission denied. Please follow these steps:\n1. Click the 🔒 icon on the left side of the address bar\n2. Set "Location" permission to "Allow"\n3. Refresh the page and try again'))
             return
           }
           
+          // For 'granted' and 'prompt' states, proceed with getting location
+          // 'prompt' will trigger the browser's permission request popup
           if (permissionStatus.state === 'prompt') {
-            // Permission not yet requested, will prompt user
-            console.log('Requesting geolocation permission...')
+            console.log('Permission not yet requested, will show browser permission popup...')
+          } else if (permissionStatus.state === 'granted') {
+            console.log('Permission already granted, getting location...')
           }
           
-          // Proceed with getting location
+          // Proceed with getting location (this will trigger permission popup if needed)
           this.requestLocation(resolve, reject)
         }).catch(() => {
           // Fallback if permissions API is not supported
+          console.log('Permissions API not supported, proceeding with location request...')
           this.requestLocation(resolve, reject)
         })
       } else {
         // Fallback for browsers that don't support permissions API
+        console.log('Permissions API not available, proceeding with location request...')
         this.requestLocation(resolve, reject)
       }
     })
@@ -335,23 +346,23 @@ export class MapService {
         
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Location access denied. Please enable location permissions in your browser settings.'
+            errorMessage = 'Location access denied. Please follow these steps:\n\n1. Click the 🔒 icon on the left side of the address bar\n2. Find the "Location" option\n3. Select "Allow"\n4. Refresh the page and try again\n\nIf the problem persists, check location permissions in your browser settings.'
             break
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable. Please try again.'
+            errorMessage = 'Location information unavailable. Possible causes:\n• Network connection issues\n• Weak GPS signal\n• Browser geolocation service failure\n\nPlease check your network connection and try again.'
             break
           case error.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.'
+            errorMessage = 'Location request timed out. Possible causes:\n• Network latency\n• Slow GPS response\n• Browser settings issues\n\nPlease try again later or check your network connection.'
             break
           default:
-            errorMessage = `Location error: ${error.message}`
+            errorMessage = `Location error: ${error.message}\n\nPlease try refreshing the page or contact technical support.`
         }
         
         reject(new Error(errorMessage))
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000, // Increased timeout to 15 seconds
         maximumAge: 60000
       }
     )
