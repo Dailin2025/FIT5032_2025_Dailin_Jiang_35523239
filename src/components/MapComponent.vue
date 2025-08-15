@@ -3,7 +3,8 @@
     <!-- 地图控制面板 -->
     <div class="map-controls mb-3">
       <div class="row">
-        <div class="col-md-4">
+        <!-- 搜索栏 -->
+        <div class="col-md-6">
           <div class="search-box">
             <i class="fas fa-search search-icon"></i>
             <input
@@ -13,49 +14,55 @@
               placeholder="Search places..."
               @keyup.enter="searchPlaces"
             />
-
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="location-controls">
+        
+        <!-- 主要功能按钮组 -->
+        <div class="col-md-6">
+          <div class="d-flex justify-content-end gap-2">
+            <!-- 位置相关按钮 -->
+            <div class="btn-group me-2" role="group">
+              <button 
+                class="btn btn-primary" 
+                @click="getCurrentLocation"
+                title="Get current location"
+              >
+                <i class="fas fa-location-arrow me-1"></i>My Location
+              </button>
+              <button 
+                class="btn btn-outline-info" 
+                @click="resetLocationPermission"
+                title="Reset location permission"
+              >
+                <i class="fas fa-key me-1"></i>Reset Permission
+              </button>
+            </div>
+            
+            <!-- 地图操作按钮 -->
+            <div class="btn-group me-2" role="group">
+              <button 
+                class="btn btn-outline-success" 
+                @click="clearMarkers"
+                title="Clear markers"
+              >
+                <i class="fas fa-trash me-1"></i>Clear Markers
+              </button>
+              <button 
+                class="btn btn-outline-warning" 
+                @click="exportMapData"
+                title="Export map data"
+              >
+                <i class="fas fa-download me-1"></i>Export
+              </button>
+            </div>
+            
+            <!-- 路线规划按钮 -->
             <button 
-              class="btn btn-outline-primary me-2" 
-              @click="getCurrentLocation"
-              title="Get current location"
-            >
-              <i class="fas fa-location-arrow me-1"></i>My Location
-            </button>
-            <button 
-              class="btn btn-outline-info me-2" 
-              @click="resetLocationPermission"
-              title="Reset location permission"
-            >
-              <i class="fas fa-key me-1"></i>Reset Permission
-            </button>
-            <button 
-              class="btn btn-outline-success" 
-              @click="clearMarkers"
-              title="Clear markers"
-            >
-              <i class="fas fa-trash me-1"></i>Clear Markers
-            </button>
-          </div>
-        </div>
-        <div class="col-md-4 text-end">
-          <div class="map-actions">
-            <button 
-              class="btn btn-outline-info me-2" 
+              class="btn btn-outline-secondary" 
               @click="showRoutePanel = !showRoutePanel"
               title="Route planning"
             >
               <i class="fas fa-route me-1"></i>Route Planning
-            </button>
-            <button 
-              class="btn btn-outline-warning" 
-              @click="exportMapData"
-              title="Export map data"
-            >
-              <i class="fas fa-download me-1"></i>Export
             </button>
           </div>
         </div>
@@ -697,8 +704,9 @@ function resetLocationPermission() {
 
 .map-controls {
   background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 10px;
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .search-box {
@@ -719,11 +727,88 @@ function resetLocationPermission() {
   border-radius: 25px;
   border: 2px solid #e9ecef;
   transition: all 0.3s ease;
+  height: 45px;
+  font-size: 1rem;
 }
 
 .search-input:focus {
   border-color: #667eea;
   box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* 按钮组样式 */
+.btn-group {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.btn-group .btn {
+  border: none;
+  padding: 0.6rem 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-group .btn:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.btn-group .btn:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.btn-group .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 主要按钮样式 */
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .map-controls .row {
+    flex-direction: column;
+  }
+  
+  .col-md-6 {
+    margin-bottom: 1rem;
+  }
+  
+  .d-flex.justify-content-end {
+    justify-content: center !important;
+  }
+  
+  .btn-group {
+    margin-bottom: 0.5rem;
+  }
+  
+  .map-container {
+    height: 300px;
+  }
+  
+  .route-panel .row {
+    flex-direction: column;
+  }
+  
+  .search-input {
+    height: 40px;
+    font-size: 0.9rem;
+  }
 }
 
 .map-container {
@@ -865,24 +950,6 @@ function resetLocationPermission() {
 .step-text {
   color: #555;
   line-height: 1.4;
-}
-
-@media (max-width: 768px) {
-  .map-controls .row {
-    flex-direction: column;
-  }
-  
-  .col-md-4, .col-md-5, .col-md-2 {
-    margin-bottom: 1rem;
-  }
-  
-  .map-container {
-    height: 300px;
-  }
-  
-  .route-panel .row {
-    flex-direction: column;
-  }
 }
 
 /* Custom marker styles */
