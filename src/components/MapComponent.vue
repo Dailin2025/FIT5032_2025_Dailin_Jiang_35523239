@@ -297,23 +297,28 @@ let map = null
 let markers = []
 
 // Lifecycle
+// 初始化地图
 onMounted(async () => {
-  await initializeMap()
-  
-  // Force map to center on Suzhou after initialization
-  if (map) {
-    // Immediately center on Suzhou
-    map.setView([31.2990, 120.5853], 12)
-    console.log('Map immediately centered on Suzhou')
-    
-    // Force a second centering after a short delay to ensure it takes effect
-    setTimeout(() => {
-      map.setView([31.2990, 120.5853], 12)
-      console.log('Map re-centered on Suzhou after delay')
+  try {
+    // 初始化地图
+    const result = await mapService.initializeMap('map')
+    if (result.success) {
+      map = result.map
       
-      // Force map refresh
-      map.invalidateSize()
-    }, 1000)
+      // 立即居中到苏州
+      if (map && map.setView) {
+        map.setView([31.2990, 120.5853], 12)
+        
+        // 延迟后再次居中，确保地图完全加载
+        setTimeout(() => {
+          if (map && map.setView) {
+            map.setView([31.2990, 120.5853], 12)
+          }
+        }, 1000)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to initialize map:', error)
   }
 })
 
@@ -398,7 +403,6 @@ async function searchPlaces() {
 async function getCurrentLocation() {
   try {
     // Show loading state
-    console.log('Getting your current location...')
     
     const result = await mapService.getCurrentLocation()
     
@@ -441,8 +445,6 @@ async function getCurrentLocation() {
           duration: 1
         })
         
-        console.log('Map centered on your location:', result.location)
-        
         // Add a temporary "You are here" marker
         const youAreHereMarker = L.marker([result.location.lat, result.location.lng])
           .addTo(map)
@@ -459,14 +461,6 @@ async function getCurrentLocation() {
       // Show success message with more details
       const message = `Location found! You are at: ${result.location.lat.toFixed(4)}, ${result.location.lng.toFixed(4)}\n\nThis should be your actual location in Suzhou, not Beijing.`
       showInfo(message)
-      
-      // Log detailed information
-      console.log('=== LOCATION DEBUG INFO ===')
-      console.log('Your location:', result.location)
-      console.log('Map center before:', map.getCenter())
-      console.log('Map zoom level:', map.getZoom())
-      console.log('Map bounds:', map.getBounds())
-      console.log('===========================')
       
     } else {
       console.error('Failed to get location:', result.error)

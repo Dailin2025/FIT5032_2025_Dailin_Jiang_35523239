@@ -15,6 +15,8 @@ export class AuthService {
     this.currentUser = null
     this.authStateListeners = []
     this.isInitialized = false
+    this.roleCache = new Map() // 添加角色缓存
+    this.lastUserCheck = null // 跟踪上次用户检查时间
     
     // 立即检查当前用户状态
     this.checkCurrentUser()
@@ -24,6 +26,16 @@ export class AuthService {
       console.log('Auth state changed:', user)
       this.currentUser = user
       this.isInitialized = true
+      
+      // 清除角色缓存
+      if (user) {
+        this.roleCache.clear()
+        this.lastUserCheck = user.uid
+      } else {
+        this.roleCache.clear()
+        this.lastUserCheck = null
+      }
+      
       this.notifyAuthStateChange(user)
       
       if (user) {
@@ -138,12 +150,14 @@ export class AuthService {
   // 检查用户角色
   async hasRole(role) {
     if (!this.currentUser) {
-      console.log('hasRole: No current user')
       return false
     }
     
-    console.log('hasRole called for role:', role, 'user email:', this.currentUser.email)
-    
+    const cachedResult = this.roleCache.get(role)
+    if (cachedResult !== undefined) {
+      return cachedResult
+    }
+
     try {
       // 从 Firestore 获取用户角色
       const userRef = doc(db, 'users', this.currentUser.uid)
@@ -151,17 +165,15 @@ export class AuthService {
       
       if (userDoc.exists()) {
         const userData = userDoc.data()
-        console.log('User document found:', userData)
-        return userData.role === role
+        const result = userData.role === role
+        this.roleCache.set(role, result)
+        return result
       }
-      
-      console.log('User document not found, checking email patterns')
       
       // 如果用户文档不存在，根据邮箱判断角色
       if (this.currentUser.email) {
         // 医生邮箱通常包含 hospital, clinic, medical 等关键词
         const email = this.currentUser.email.toLowerCase()
-        console.log('Checking email patterns for:', email)
         
         if (role === 'doctor' && (
           email.includes('hospital') || 
@@ -172,20 +184,19 @@ export class AuthService {
           email.includes('@hospital') ||
           email.includes('@clinic')
         )) {
-          console.log('Email matches doctor pattern, returning true')
+          this.roleCache.set(role, true)
           return true
         }
         
         // 管理员邮箱判断
         if (role === 'admin' && email.includes('admin')) {
-          console.log('Email matches admin pattern, returning true')
+          this.roleCache.set(role, true)
           return true
         }
       }
       
-      console.log('No pattern match, returning false for role:', role)
-      // 默认角色
-      return role === 'user'
+      this.roleCache.set(role, false)
+      return false
     } catch (error) {
       console.error('Error checking user role:', error)
       // 如果出错，根据邮箱进行简单判断
@@ -200,10 +211,12 @@ export class AuthService {
           email.includes('@hospital') ||
           email.includes('@clinic')
         )) {
+          this.roleCache.set(role, true)
           return true
         }
       }
-      return role === 'user'
+      this.roleCache.set(role, false)
+      return false
     }
   }
 

@@ -76,26 +76,20 @@ const router = createRouter({
 
 // 全局前置守卫
 router.beforeEach(async (to, from, next) => {
-  console.log('Route guard - navigating to:', to.path)
-  
   // 公开页面，直接允许访问
   if (to.path === '/login' || to.path === '/register' || to.path === '/access-denied') {
-    console.log('Public page, allowing access')
     next()
     return
   }
   
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
-    console.log('Route requires authentication')
-    
     // 检查认证服务是否可用
     if (window.authService) {
       const user = window.authService.getCurrentUser()
-      console.log('Current user:', user)
       
       if (user) {
-        // 用户已登录，检查角色权限
+        // 用户已登录，检查特殊权限
         if (to.meta.roles && to.meta.roles.length > 0) {
           try {
             // 检查用户是否有访问权限
@@ -104,7 +98,6 @@ router.beforeEach(async (to, from, next) => {
               const hasRole = await window.authService.hasRole(role)
               if (hasRole) {
                 hasAccess = true
-                console.log(`User has role '${role}', access granted`)
                 break
               }
             }
@@ -112,7 +105,6 @@ router.beforeEach(async (to, from, next) => {
             if (hasAccess) {
               next()
             } else {
-              console.log('User does not have required roles, redirecting to access denied')
               next('/access-denied')
             }
           } catch (error) {
@@ -121,24 +113,20 @@ router.beforeEach(async (to, from, next) => {
           }
         } else {
           // 没有角色要求，任何认证用户都可以访问
-          console.log('No role requirements, authenticated user allowed')
           next()
         }
       } else {
         // 用户未登录，重定向到登录页
-        console.log('User not authenticated, redirecting to login')
         next('/login')
       }
     } else {
       // 认证服务不可用，重定向到登录页
-      console.log('Auth service not available, redirecting to login')
       next('/login')
     }
     return
   }
   
   // 不需要认证的页面，允许访问
-  console.log('No auth required, allowing access')
   next()
 })
 

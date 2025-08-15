@@ -255,15 +255,22 @@ const showCreateModal = ref(null)
 const newScam = ref({ title: '', brief: '', detail: '' })
 const newCommentText = ref('')
 const userPermissions = ref({ admin: false, doctor: false })
+const lastCheckedUser = ref(null) // 用于缓存上次检查的用户邮箱
 
 // 检查用户权限
 async function checkUserPermissions() {
   if (currentUser.value && window.authService) {
     try {
+      // 避免重复检查相同用户的权限
+      const userEmail = currentUser.value.email
+      if (userEmail === lastCheckedUser.value) {
+        return
+      }
+      
       const isAdmin = await window.authService.hasRole('admin')
       const isDoctor = await window.authService.hasRole('doctor')
       userPermissions.value = { admin: isAdmin, doctor: isDoctor }
-      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+      lastCheckedUser.value = userEmail
     } catch (error) {
       console.error('Error checking permissions:', error)
       userPermissions.value = { admin: false, doctor: false }

@@ -343,19 +343,24 @@ function getCurrentUser() {
 
 const canAddDoctor = ref(false)
 const userPermissions = ref({ admin: false, doctor: false })
+const lastCheckedUser = ref(null) // 用于避免重复检查相同用户的权限
 
 // 检查用户权限
 async function checkUserPermissions() {
   if (currentUser.value && window.authService) {
     try {
+      // 避免重复检查相同用户的权限
+      const userEmail = currentUser.value.email
+      if (userEmail === lastCheckedUser.value) {
+        return
+      }
+      
       const isAdmin = await window.authService.hasRole('admin')
       const isDoctor = await window.authService.hasRole('doctor')
-      canAddDoctor.value = isAdmin || isDoctor
       userPermissions.value = { admin: isAdmin, doctor: isDoctor }
-      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+      lastCheckedUser.value = userEmail
     } catch (error) {
       console.error('Error checking permissions:', error)
-      canAddDoctor.value = false
       userPermissions.value = { admin: false, doctor: false }
     }
   }

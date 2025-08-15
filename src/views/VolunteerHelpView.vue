@@ -213,7 +213,7 @@ const userRatings = reactive({})
 const volunteerRatings = ref({})
 const currentUser = ref(null)
 const userPermissions = ref({ admin: false, doctor: false })
-
+const lastCheckedUser = ref(null) // 跟踪上次检查权限的用户
 const selectedDescription = ref(null)
 const selectedVolunteerForDescription = ref(null)
 const selectedVolunteerForComments = ref(null)
@@ -246,15 +246,32 @@ const canAddVolunteer = computed(() => {
 async function checkUserPermissions() {
   if (currentUser.value && window.authService) {
     try {
+      // 避免重复检查相同用户的权限
+      const userEmail = currentUser.value.email
+      if (userEmail === lastCheckedUser.value) {
+        return
+      }
+      
       const isAdmin = await window.authService.hasRole('admin')
       const isDoctor = await window.authService.hasRole('doctor')
       userPermissions.value = { admin: isAdmin, doctor: isDoctor }
-      console.log('User permissions - Admin:', isAdmin, 'Doctor:', isDoctor)
+      lastCheckedUser.value = userEmail
     } catch (error) {
       console.error('Error checking permissions:', error)
       userPermissions.value = { admin: false, doctor: false }
     }
   }
+}
+
+// 防抖的权限检查函数
+let permissionCheckTimeout = null
+function debouncedCheckPermissions() {
+  if (permissionCheckTimeout) {
+    clearTimeout(permissionCheckTimeout)
+  }
+  permissionCheckTimeout = setTimeout(() => {
+    checkUserPermissions()
+  }, 100)
 }
 
 // 同步版本的删除权限检查
@@ -697,7 +714,7 @@ onMounted(async () => {
   await loadVolunteerComments()
   window.addEventListener('auth-change', () => {
     currentUser.value = getCurrentUser()
-    checkUserPermissions() // 重新检查权限
+    debouncedCheckPermissions() // 重新检查权限
   })
 })
 </script>
