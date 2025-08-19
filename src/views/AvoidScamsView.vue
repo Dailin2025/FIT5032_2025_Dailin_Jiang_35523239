@@ -153,6 +153,38 @@
                     </div>
                   </div>
                   <!-- Add Comment Form -->
+                  <!-- Email Report Button -->
+                  <div class="mb-3">
+                    <div class="mb-2">
+                      <label for="toEmail" class="form-label small">Send to email:</label>
+                      <input 
+                        type="email" 
+                        id="toEmail" 
+                        class="form-control form-control-sm" 
+                        v-model="toEmail" 
+                        placeholder="admin@example.com"
+                        value="djia0020@student.monash.edu"
+                      >
+                    </div>
+                    
+                    <!-- Attachment Upload -->
+                    <div class="mb-2">
+                      <label for="attachment" class="form-label small">Attachment (optional):</label>
+                      <input 
+                        type="file" 
+                        id="attachment" 
+                        class="form-control form-control-sm" 
+                        @change="handleAttachmentChange"
+                        accept="image/*,.pdf,.doc,.docx,.txt"
+                      >
+                      <small class="text-muted">Support: Images, PDF, Word, Text files. Max size: 30KB</small>
+                    </div>
+                    
+                    <button class="btn btn-warning w-100" @click="reportScamWithAttachment(selectedScam, toEmail)">
+                      <i class="fas fa-envelope me-2"></i>Send Email Report
+                    </button>
+                  </div>
+                  
                   <div v-if="canComment" class="comment-form">
                     <textarea v-model="newCommentText" class="form-control mb-3" rows="3" placeholder="Add your comment..."></textarea>
                     <button class="btn btn-primary w-100" @click="handleAddComment">
@@ -254,6 +286,8 @@ const selectedScam = ref(null)
 const showCreateModal = ref(null)
 const newScam = ref({ title: '', brief: '', detail: '' })
 const newCommentText = ref('')
+const toEmail = ref('djia0020@student.monash.edu') // 默认收件人邮箱
+const selectedAttachment = ref(null) // 选中的附件文件
 const userPermissions = ref({ admin: false, doctor: false })
 const lastCheckedUser = ref(null) // 用于缓存上次检查的用户邮箱
 
@@ -735,22 +769,73 @@ async function calculateSafetyScore() {
 }
 
 // Email report functionality
-async function reportScam(scamData) {
+async function reportScam(scamData, toEmail) {
   if (!currentUser.value) {
     showError('Please login first')
     return
   }
   
   try {
-    const result = await emailService.sendScamReport(scamData, currentUser.value.email)
+    const result = await emailService.sendScamReport(scamData, currentUser.value.email, toEmail)
     if (result.success) {
-      showSuccess('Report email sent successfully!')
+      showSuccess(`Report email sent successfully to ${toEmail}!`)
     } else {
       alert('Send failed: ' + result.error)
     }
   } catch (error) {
     console.error('Send error:', error)
     alert('An error occurred while sending')
+  }
+}
+
+// Email report with attachment functionality
+async function reportScamWithAttachment(scamData, toEmail) {
+  if (!currentUser.value) {
+    showError('Please login first')
+    return
+  }
+  
+  try {
+    let result
+    if (selectedAttachment.value) {
+      // 发送带附件的邮件
+      result = await emailService.sendScamReportWithAttachment(
+        scamData,
+        currentUser.value.email,
+        selectedAttachment.value,
+        toEmail
+      )
+    } else {
+      // 发送普通邮件
+      result = await emailService.sendScamReport(scamData, currentUser.value.email, toEmail)
+    }
+    
+    if (result.success) {
+      showSuccess(`Report email sent successfully to ${toEmail}!`)
+      selectedAttachment.value = null // 清空附件
+    } else {
+      alert('Send failed: ' + result.error)
+    }
+  } catch (error) {
+    console.error('Send error:', error)
+    alert('An error occurred while sending')
+  }
+}
+
+// Handle attachment selection
+function handleAttachmentChange(event) {
+  const file = event.target.files[0]
+  if (file) {
+    // Check file size (EmailJS limit is 50KB for variables, but we use 30KB to be safe)
+    const maxSize = 30 * 1024 // 30KB to be safe with base64 encoding
+    if (file.size > maxSize) {
+      showError(`File too large! Maximum size is 30KB. Your file: ${(file.size / 1024).toFixed(1)}KB`)
+      event.target.value = '' // Clear the input
+      return
+    }
+    
+    selectedAttachment.value = file
+    showSuccess(`Attachment selected: ${file.name} (${(file.size / 1024).toFixed(1)}KB)`)
   }
 }
 </script>
